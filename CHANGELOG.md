@@ -7,25 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.18] - 2026-09-10
+
 ### Added
 
-- Base Game now shows a support warning on first launch.
 - Engines can be reordered and assigned preferred versions.
 
 ### Changed
 
-- Simplified the startup screen with a smooth background reveal and bottom bar.
-- Storage moves now use bulk native operations, avoid copied backups, and can resume after an interrupted transfer.
+- Storage moves use bulk operations and can resume.
 
 ### Fixed
 
-- V-Slice now uses the current Itch.io version and downloads it in WeekBox.
-- Startup loading stripes now animate cleanly without a chopped final stripe at the progress edge.
+- Startup loading stripes no longer end with a chopped stripe.
+- Removed broken GameBanana download links.
+- Mod details load when optional sources fail.
 
 ## [2.1.17] - 2026-09-09
 
+### Added
+
+- Base Game warns when files are missing.
+
+### Changed
+
+- Simplified the startup screen.
+
 ### Fixed
 
+- V-Slice downloads the current Itch.io release.
 - Mods are only marked executable if they contain an executable.
 - V-Slice now includes the Itch.io 0.8.6 version.
 - Google Drive folders are ignored as download links.
@@ -959,7 +969,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Downloads for Windows, Linux, and macOS.
 - Packages for x64, ARM64, ARMHF, and Universal Macs where available.
 
-[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.17...HEAD
+[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.18...HEAD
+[2.1.18]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.17...v2.1.18
 [2.1.17]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.16...v2.1.17
 [2.1.16]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.15...v2.1.16
 [2.1.15]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.14...v2.1.15
