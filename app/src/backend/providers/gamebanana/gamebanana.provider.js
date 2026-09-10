@@ -521,14 +521,16 @@ export const gameBananaApi = {
     try {
       const parsed = new URL(url);
       const hostname = parsed.hostname.toLowerCase();
-      if (isGoogleDriveHost(hostname)) return getGoogleDriveFileDetails(url);
+      if (isGoogleDriveHost(hostname))
+        return await getGoogleDriveFileDetails(url);
       if (
         hostname !== "github.com" &&
         !["mediafire.com", "www.mediafire.com"].includes(hostname)
       ) {
         return { filename: null, size: 0 };
       }
-      if (hostname === "github.com") return getExternalHeaderDetails(url, 0);
+      if (hostname === "github.com")
+        return await getExternalHeaderDetails(url, 0);
       const mediafire = await getMediaFireDownloadInfo(url);
       if (mediafire.result) return mediafire.result;
       return getExternalHeaderDetails(
@@ -536,7 +538,7 @@ export const gameBananaApi = {
         mediafire.pageSize,
       );
     } catch (error) {
-      return { filename: null, size: 0 };
+      return null;
     }
   },
 
@@ -619,6 +621,10 @@ export const gameBananaApi = {
             const details = await this.getExternalFileDetails(
               option.downloadUrl,
             );
+            if (!details) {
+              option.unavailable = true;
+              return;
+            }
             if (details) {
               if (details.filename) option.name = details.filename;
               if (details.size > 0) {
@@ -779,15 +785,25 @@ export const gameBananaApi = {
           loadingRequirements: includeRequirements,
         }),
       );
-      const downloadOptions = await this.getDownloadOptions(data);
+      let downloadOptions = [];
+      try {
+        downloadOptions = await this.getDownloadOptions(data);
+      } catch (error) {
+        console.warn("Could not inspect GameBanana download options", error);
+      }
       await notifyProgress(
         buildModDetails(this, data, images, downloadOptions, [], {
           loadingRequirements: includeRequirements,
         }),
       );
-      const requirements = includeRequirements
-        ? await this.getRequirements(data)
-        : [];
+      let requirements = [];
+      if (includeRequirements) {
+        try {
+          requirements = await this.getRequirements(data);
+        } catch (error) {
+          console.warn("Could not inspect GameBanana requirements", error);
+        }
+      }
       return buildModDetails(this, data, images, downloadOptions, requirements);
     } catch (error) {
       return null;
