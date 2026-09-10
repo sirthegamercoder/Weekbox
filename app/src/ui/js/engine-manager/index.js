@@ -7,6 +7,192 @@ import { networkStatus } from "../../../backend/core/system/network-status.servi
 import { sidebar } from "../sidebar.js";
 import { getEngineLabel, getEngineLabelKey, i18n, t } from "../i18n/index.js";
 import { errorHandler } from "../errors/errorHandler.js";
+import {
+  getEngineOrder,
+  getEngineVersionOrder,
+  getPreferredEngineVersion,
+  setEngineOrder,
+  setEngineVersionOrder,
+  setPreferredEngineVersion,
+} from "../../../backend/config/engine-preferences.js";
+
+function sortableItems(container, selector) {
+  return [...container.children].filter((item) => item.matches(selector));
+}
+
+function setupAnimatedSortable(
+  container,
+  item,
+  { selector, axis = "y", onDrop },
+) {
+  let drag = null;
+  let suppressClick = false;
+  const flipFrames = new WeakMap();
+  item.draggable = false;
+
+  const clearDragStyles = () => {
+    item.classList.remove("is-dragging", "is-settling");
+    item.style.position = "";
+    item.style.left = "";
+    item.style.top = "";
+    item.style.width = "";
+    item.style.height = "";
+    item.style.zIndex = "";
+    item.style.pointerEvents = "";
+    item.style.transform = "";
+    item.style.transition = "";
+    item.style.translate = "";
+  };
+
+  const animateLayout = (previousRects) => {
+    const movedItems = sortableItems(container, selector);
+    movedItems.forEach((other) => {
+      const before = previousRects.get(other);
+      if (!before) return;
+      const after = other.getBoundingClientRect();
+      const distance =
+        axis === "x" ? before.left - after.left : before.top - after.top;
+      if (!distance) return;
+      other.style.setProperty(
+        "--engine-sort-shift",
+        axis === "x" ? `${distance}px 0` : `0 ${distance}px`,
+      );
+      void other.offsetWidth;
+      const previousFrame = flipFrames.get(other);
+      if (previousFrame) cancelAnimationFrame(previousFrame);
+      flipFrames.set(
+        other,
+        requestAnimationFrame(() => {
+          flipFrames.delete(other);
+          if (drag) other.style.removeProperty("--engine-sort-shift");
+        }),
+      );
+    });
+  };
+
+  const movePlaceholder = (clientX, clientY) => {
+    if (!drag) return;
+    const previousRects = new Map(
+      sortableItems(container, selector).map((other) => [
+        other,
+        other.getBoundingClientRect(),
+      ]),
+    );
+    const pointer = axis === "x" ? clientX : clientY;
+    const target = sortableItems(container, selector).find((other) => {
+      const rect = other.getBoundingClientRect();
+      const midpoint =
+        (axis === "x" ? rect.left : rect.top) +
+        (axis === "x" ? rect.width : rect.height) / 2;
+      return pointer < midpoint;
+    });
+    if (target) container.insertBefore(drag.placeholder, target);
+    else container.appendChild(drag.placeholder);
+    animateLayout(previousRects);
+  };
+
+  const finish = (cancelled = false) => {
+    if (!drag) return;
+    const currentDrag = drag;
+    drag = null;
+    try {
+      item.releasePointerCapture(currentDrag.pointerId);
+    } catch {}
+
+    if (cancelled) {
+      if (currentDrag.originalNextSibling?.parentNode === container) {
+        container.insertBefore(
+          currentDrag.placeholder,
+          currentDrag.originalNextSibling,
+        );
+      } else {
+        container.appendChild(currentDrag.placeholder);
+      }
+    }
+
+    if (!currentDrag.moved || cancelled) {
+      currentDrag.placeholder.replaceWith(item);
+      clearDragStyles();
+      return;
+    }
+
+    const finalRect = currentDrag.placeholder.getBoundingClientRect();
+    item.classList.add("is-settling");
+    void item.offsetWidth;
+    item.style.left = `${finalRect.left}px`;
+    item.style.top = `${finalRect.top}px`;
+    item.style.transform = "scale(1)";
+    suppressClick = true;
+    setTimeout(() => {
+      suppressClick = false;
+    }, 400);
+    setTimeout(() => {
+      currentDrag.placeholder.replaceWith(item);
+      clearDragStyles();
+      onDrop?.();
+    }, 180);
+  };
+
+  item.addEventListener(
+    "click",
+    (event) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
+  item.addEventListener("pointerdown", (event) => {
+    if (
+      (event.pointerType === "mouse" && event.button !== 0) ||
+      event.target.closest("button, a, input, select")
+    )
+      return;
+    const rect = item.getBoundingClientRect();
+    const placeholder = document.createElement("div");
+    placeholder.className = `engine-sort-placeholder ${axis}`;
+    placeholder.style.width = `${rect.width}px`;
+    placeholder.style.height = `${rect.height}px`;
+    placeholder.style.margin = getComputedStyle(item).margin;
+    const originalNextSibling = item.nextElementSibling;
+    item.after(placeholder);
+    document.body.appendChild(item);
+    item.classList.add("is-dragging");
+    item.style.position = "fixed";
+    item.style.left = `${rect.left}px`;
+    item.style.top = `${rect.top}px`;
+    item.style.width = `${rect.width}px`;
+    item.style.height = `${rect.height}px`;
+    item.style.zIndex = "1000";
+    item.style.pointerEvents = "none";
+    item.style.transform = "scale(1.04)";
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      placeholder,
+      originalNextSibling,
+      moved: false,
+    };
+    item.setPointerCapture(event.pointerId);
+  });
+  item.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    drag.moved = true;
+    event.preventDefault();
+    item.style.left = `${event.clientX - item.offsetWidth / 2}px`;
+    item.style.top = `${event.clientY - item.offsetHeight / 2}px`;
+    movePlaceholder(event.clientX, event.clientY);
+  });
+  item.addEventListener("pointerup", (event) => {
+    if (drag?.pointerId === event.pointerId) finish();
+  });
+  item.addEventListener("pointercancel", () => finish(true));
+}
 
 export const engineManagerModal = {
   currentIndex: 0,
@@ -104,22 +290,10 @@ export const engineManagerModal = {
       }
       groupedEngines[engine.id].push(engine.version);
     });
-    // 2. Ordenar bas ndonos en el orden exacto del aside
-    const ENGINE_ORDER = [
-      "vslice",
-      "codename",
-      "psych",
-      "pslice",
-      "fpsplus",
-      "psychonline",
-      "executable",
-    ];
+    // 2. Keep the carousel and sidebar in the user's preferred order.
+    const engineOrder = getEngineOrder(Object.keys(groupedEngines));
     const sortedEngineEntries = Object.entries(groupedEngines).sort((a, b) => {
-      const indexA = ENGINE_ORDER.indexOf(a[0]);
-      const indexB = ENGINE_ORDER.indexOf(b[0]);
-      const posA = indexA === -1 ? 999 : indexA;
-      const posB = indexB === -1 ? 999 : indexB;
-      return posA - posB;
+      return engineOrder.indexOf(a[0]) - engineOrder.indexOf(b[0]);
     });
     // Ajustar el índice por si se borró el último elemento
     if (this.currentIndex >= sortedEngineEntries.length) {
@@ -168,8 +342,34 @@ export const engineManagerModal = {
       icon.className = iconClass;
     };
 
+    const syncEngineOrder = () => {
+      const orderedIds = [...indexContainer.children].map(
+        (icon) => icon.dataset.engineId,
+      );
+      orderedIds.forEach((engineId) => {
+        const card = [...track.children].find(
+          (candidate) => candidate.dataset.engineId === engineId,
+        );
+        if (card) track.appendChild(card);
+      });
+      setEngineOrder(orderedIds);
+      sidebar.applyEngineOrder();
+      const activeCard = track.querySelector(".engine-column.active");
+      this.currentIndex = activeCard
+        ? [...track.children].indexOf(activeCard)
+        : 0;
+      updateCarousel();
+    };
+
+    const reorderEngines = (draggedIcon, targetIcon, before) => {
+      if (!draggedIcon || !targetIcon || draggedIcon === targetIcon) return;
+      if (before) indexContainer.insertBefore(draggedIcon, targetIcon);
+      else indexContainer.insertBefore(draggedIcon, targetIcon.nextSibling);
+      syncEngineOrder();
+    };
+
     // 4. Generar las tarjetas y los iconos del índice
-    sortedEngineEntries.forEach(([engineId, versions], idx) => {
+    sortedEngineEntries.forEach(([engineId, versions]) => {
       const details = ENGINE_DETAILS[engineId] || {
         name: engineId,
         icon: "exe.png",
@@ -177,9 +377,11 @@ export const engineManagerModal = {
       const displayName = getEngineLabel(engineId, details.name);
       const card = document.createElement("div");
       card.className = "engine-column";
+      card.dataset.engineId = engineId;
       card.addEventListener("click", () => {
-        if (this.currentIndex !== idx) {
-          this.currentIndex = idx;
+        const index = [...track.children].indexOf(card);
+        if (this.currentIndex !== index) {
+          this.currentIndex = index;
           updateCarousel();
         }
       });
@@ -225,9 +427,38 @@ export const engineManagerModal = {
         fallback: "rgba(255, 255, 255, 0.1)",
       });
 
+      const orderedVersions = getEngineVersionOrder(engineId, versions);
       const versionsList = document.createElement("div");
+      versionsList.setAttribute("role", "list");
       versionsList.className = "engine-versions-list";
-      versions.forEach((version) => {
+      const preferredVersion = getPreferredEngineVersion(
+        engineId,
+        orderedVersions,
+      );
+      const saveVersionOrder = () =>
+        setEngineVersionOrder(
+          engineId,
+          [...versionsList.children].map((item) => item.dataset.version),
+        );
+      const setPreferredVersion = (version) => {
+        setPreferredEngineVersion(engineId, version);
+        versionsList
+          .querySelectorAll(".version-item")
+          .forEach((versionItem) => {
+            const selected = versionItem.dataset.version === version;
+            versionItem.classList.toggle("is-preferred", selected);
+            const button = versionItem.querySelector(".engine-preferred-btn");
+            if (!button) return;
+            button.classList.toggle("is-preferred", selected);
+            button.title = t(
+              selected
+                ? "engineManager.preferredVersion"
+                : "engineManager.setPreferredVersion",
+            );
+            button.setAttribute("aria-label", button.title);
+          });
+      };
+      orderedVersions.forEach((version) => {
         const updateDisabled = !networkStatus.online;
         const running = FS.isEngineRunning(engineId, version);
         const hasUpdate =
@@ -238,6 +469,8 @@ export const engineManagerModal = {
         let item;
         if (itemTpl) {
           item = itemTpl.content.firstElementChild.cloneNode(true);
+          item.dataset.version = version;
+          item.draggable = false;
           item.querySelector(".version-text").textContent = version;
           const updateBtn = item.querySelector(".engine-update-btn");
           if (!hasUpdate && updateBtn) {
@@ -269,6 +502,8 @@ export const engineManagerModal = {
         } else {
           item = document.createElement("div");
           item.className = "version-item";
+          item.dataset.version = version;
+          item.draggable = false;
           const versionText = document.createElement("span");
           versionText.className = "version-text";
           versionText.textContent = version;
@@ -319,8 +554,32 @@ export const engineManagerModal = {
           deleteIcon.className = "fa-solid fa-trash";
           deleteBtn.appendChild(deleteIcon);
 
-          actions.append(dirBtn, deleteBtn);
+          const preferredBtn = document.createElement("button");
+          preferredBtn.className = "engine-action-btn engine-preferred-btn";
+          preferredBtn.type = "button";
+          const preferredIcon = document.createElement("i");
+          preferredIcon.className = "fa-solid fa-star";
+          preferredIcon.setAttribute("aria-hidden", "true");
+          preferredBtn.appendChild(preferredIcon);
+          actions.append(dirBtn, deleteBtn, preferredBtn);
           item.append(versionText, actions);
+        }
+
+        item.classList.toggle("is-preferred", preferredVersion === version);
+        const preferredBtn = item.querySelector(".engine-preferred-btn");
+        if (preferredBtn) {
+          const selected = preferredVersion === version;
+          preferredBtn.classList.toggle("is-preferred", selected);
+          preferredBtn.title = t(
+            selected
+              ? "engineManager.preferredVersion"
+              : "engineManager.setPreferredVersion",
+          );
+          preferredBtn.setAttribute("aria-label", preferredBtn.title);
+          preferredBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            setPreferredVersion(version);
+          });
         }
 
         const updateBtn = item.querySelector(".engine-update-btn");
@@ -413,20 +672,57 @@ export const engineManagerModal = {
           }
         });
         versionsList.appendChild(item);
+        setupAnimatedSortable(versionsList, item, {
+          selector: ".version-item",
+          onDrop: saveVersionOrder,
+        });
       });
       card.appendChild(versionsList);
       track.appendChild(card);
       // -- Icono del  ndice Inferior (Pastilla) --
       const indexIcon = document.createElement("img");
       indexIcon.className = "em-index-icon";
+      indexIcon.dataset.engineId = engineId;
+      indexIcon.draggable = false;
       indexIcon.src = `assets/icons/${details.icon}`;
       indexIcon.onerror = () => (indexIcon.src = "assets/icons/exe.png");
       indexIcon.title = displayName;
+      indexIcon.setAttribute("role", "button");
+      indexIcon.setAttribute("tabindex", "0");
+      indexIcon.setAttribute("aria-label", displayName);
       indexIcon.addEventListener("click", () => {
-        this.currentIndex = idx;
+        this.currentIndex = [...indexContainer.children].indexOf(indexIcon);
         updateCarousel();
       });
+      indexIcon.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        this.currentIndex = [...indexContainer.children].indexOf(indexIcon);
+        updateCarousel();
+      });
+      indexIcon.addEventListener("keydown", (event) => {
+        const direction = ["ArrowLeft", "ArrowUp"].includes(event.key)
+          ? -1
+          : ["ArrowRight", "ArrowDown"].includes(event.key)
+            ? 1
+            : 0;
+        const target =
+          direction < 0
+            ? indexIcon.previousElementSibling
+            : direction > 0
+              ? indexIcon.nextElementSibling
+              : null;
+        if (!target) return;
+        event.preventDefault();
+        reorderEngines(indexIcon, target, direction < 0);
+        indexIcon.focus();
+      });
       indexContainer.appendChild(indexIcon);
+      setupAnimatedSortable(indexContainer, indexIcon, {
+        selector: ".em-index-icon",
+        axis: "x",
+        onDrop: syncEngineOrder,
+      });
     });
     // 5. L gica de c lculo y actualizaci n del Carrusel
     const updateCarousel = () => {

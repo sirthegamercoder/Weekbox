@@ -10,14 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Base Game now shows a support warning on first launch.
+- Engines can be reordered and assigned preferred versions.
 
 ### Changed
 
 - Simplified the startup screen with a smooth background reveal and bottom bar.
+- Storage moves now use bulk native operations, avoid copied backups, and can resume after an interrupted transfer.
 
 ### Fixed
 
 - V-Slice now uses the current Itch.io version and downloads it in WeekBox.
+- Startup loading stripes now animate cleanly without a chopped final stripe at the progress edge.
 
 ## [2.1.17] - 2026-09-09
 

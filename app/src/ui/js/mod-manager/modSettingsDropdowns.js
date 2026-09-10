@@ -2,12 +2,9 @@ import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
 import { setupDropdown } from "../../utils/components/dropdown.component.js";
 import { escapeHtml } from "./modSettingsTemplates.js";
 import { getEngineLabel, t } from "../i18n/index.js";
+import { getEngineVersionOrder } from "../../../backend/config/engine-preferences.js";
 
-export function setupModSettingsDropdowns(
-  overlay,
-  mod,
-  installedEngines,
-) {
+export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
   const assignableEngines = Object.entries(ENGINE_DETAILS).filter(
     ([id]) => id !== "executable",
   );
@@ -111,9 +108,12 @@ export function setupModSettingsDropdowns(
     }
 
     updateVersionVisibility(true);
-    const versions = installedEngines
-      .filter((item) => item.id === selectedEngineId)
-      .map((item) => item.version);
+    const versions = getEngineVersionOrder(
+      selectedEngineId,
+      installedEngines
+        .filter((item) => item.id === selectedEngineId)
+        .map((item) => item.version),
+    );
 
     if (versions.length === 0) {
       versionTrigger.disabled = true;

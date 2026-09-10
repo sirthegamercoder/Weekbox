@@ -13,6 +13,7 @@ import { networkStatus } from "../../backend/core/system/network-status.service.
 import { appEvents } from "../../backend/core/routing/events.service.js";
 import { getEngineLabel, getEngineLabelKey, t } from "./i18n/index.js";
 import { ENGINE_DETAILS } from "../../backend/config/engines.config.js";
+import { getEngineOrder } from "../../backend/config/engine-preferences.js";
 import { escapeHtml } from "./mod-manager/modSettingsTemplates.js";
 
 const SIDEBAR_WIDTH_KEY = "weekbox_sidebar_width";
@@ -429,6 +430,20 @@ export const sidebar = {
     button.click();
     return true;
   },
+  applyEngineOrder() {
+    const wrapper = document.getElementById("engines-wrapper");
+    if (!wrapper) return;
+    const buttons = new Map(
+      [...wrapper.querySelectorAll(".sidebar__engine-btn")].map((button) => [
+        button.dataset.engineId,
+        button,
+      ]),
+    );
+    for (const engineId of getEngineOrder(buttons.keys())) {
+      const button = buttons.get(engineId);
+      if (button) wrapper.appendChild(button);
+    }
+  },
   extractVersionFromUrl(url) {
     if (!url) return "Unknown";
     const githubMatch = url.match(/\/download\/(v?([^\/]+))\//);
@@ -449,7 +464,12 @@ export const sidebar = {
       if (!response.ok) throw new Error("Failed to load engines-router.json");
       const enginesRouter = await response.json();
       wrapper.innerHTML = "";
-      for (const engineDef of enginesRouter) {
+      const engineDefsById = new Map(
+        enginesRouter.map((engineDef) => [engineDef.versions, engineDef]),
+      );
+      for (const engineId of getEngineOrder(engineDefsById.keys())) {
+        const engineDef = engineDefsById.get(engineId);
+        if (!engineDef) continue;
         const details = ENGINE_DETAILS[engineDef.versions] || {};
         const displayName = getEngineLabel(
           engineDef.versions,
@@ -516,7 +536,8 @@ export const sidebar = {
               `<span class="sidebar__marquee-text">${displayName}</span>`;
             this.updateEngineMarquee(btn);
             setTimeout(
-              () => alert(t("network.loadVersionFailed", { name: displayName })),
+              () =>
+                alert(t("network.loadVersionFailed", { name: displayName })),
               0,
             );
           }

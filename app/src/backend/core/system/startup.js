@@ -204,13 +204,16 @@ async function recommendSaferStorageLocation() {
       defaultPath,
       ({ progress, copiedFiles, totalFiles, phase }) => {
         const preparing = phase === "preparing";
+        const nativeMove = phase === "moving" && !totalFiles;
         toastSystem.update(toastId, {
           message: preparing
             ? t("storage.preparingFiles")
-            : t("storage.movingFilesProgress", {
-                copied: copiedFiles,
-                total: totalFiles,
-              }),
+            : nativeMove
+              ? t("storage.movingFiles")
+              : t("storage.movingFilesProgress", {
+                  copied: copiedFiles,
+                  total: totalFiles,
+                }),
           progress,
         });
       },

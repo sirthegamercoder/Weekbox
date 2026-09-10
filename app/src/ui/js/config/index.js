@@ -451,8 +451,8 @@ export const configModal = {
     storageMoveFeedback.show();
   },
 
-  updateStorageMoveToast({ progress, copiedFiles, totalFiles }) {
-    storageMoveFeedback.update({ progress, copiedFiles, totalFiles });
+  updateStorageMoveToast({ progress, copiedFiles, totalFiles, phase }) {
+    storageMoveFeedback.update({ progress, copiedFiles, totalFiles, phase });
   },
 
   completeStorageMoveToast() {

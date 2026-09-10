@@ -14,6 +14,7 @@ import {
   syncLaunchButton,
 } from "./processUiSync.js";
 import { getEngineLabel, i18n, t } from "../i18n/index.js";
+import { getPreferredEngineVersion } from "../../../backend/config/engine-preferences.js";
 
 function formatVersionLabel(version) {
   if (!version) return "v 0.0.1";
@@ -33,11 +34,17 @@ function getCardEngineContext(mod, standaloneModIds, installedEngines) {
     ENGINE_DETAILS[mod.engineId],
   );
   const engine = hasEngine
-    ? installedEngines.find(
-        (item) =>
-          item.id === mod.engineId &&
-          (!mod.engineVersion || item.version === mod.engineVersion),
-      )
+    ? (() => {
+        const versions = installedEngines
+          .filter((item) => item.id === mod.engineId)
+          .map((item) => item.version);
+        const version =
+          mod.engineVersion ||
+          getPreferredEngineVersion(mod.engineId, versions);
+        return installedEngines.find(
+          (item) => item.id === mod.engineId && item.version === version,
+        );
+      })()
     : null;
   let engineBadgeHtml = modManagerTemplates.unassignedBadge();
   if (!isExecutable && (mod.engineLocked || hasEngine)) {

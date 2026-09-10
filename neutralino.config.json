@@ -43,6 +43,7 @@
   "cli": {
     "binaryName": "WeekBox",
     "resourcesPath": "/app/",
+    "autoReloadExclude": "[/\\\\]dist([/\\\\]|$)",
     "extensionsPath": "/extensions/",
     "clientLibrary": "/app/src/backend/core/native/pc/neutralino.js",
     "binaryVersion": "6.9.0",
