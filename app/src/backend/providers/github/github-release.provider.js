@@ -1,10 +1,12 @@
 import { ENGINE_RELEASE_SOURCES } from "../../config/engine-release-sources.config.js";
 import { nativeFetch } from "../../services/network/native-http.js";
+import { getItchRelease } from "../itch/itch-release.provider.js";
 
 const CACHE_PREFIX = "weekbox-engine-releases-v3-";
 const CACHE_FRESH_MS = 3 * 60 * 60 * 1000;
 const NIGHTLY_CACHE_PREFIX = "weekbox-engine-nightly-v3-";
 const NIGHTLY_CACHE_MS = 3 * 60 * 60 * 1000;
+const GITHUB_REQUEST_TIMEOUT_MS = 15_000;
 const GITHUB_API_HEADERS = {
   Accept: "application/vnd.github+json",
   "User-Agent": "WeekBox",
@@ -168,7 +170,7 @@ async function getLatestSuccessfulRun(source, artifact) {
   const branch = encodeURIComponent(source.nightly.branch);
   const response = await nativeFetch(
     `https://api.github.com/repos/${source.repository}/actions/workflows/${workflow}/runs?branch=${branch}&status=success&per_page=1`,
-    { headers: GITHUB_API_HEADERS },
+    { headers: GITHUB_API_HEADERS, timeout: GITHUB_REQUEST_TIMEOUT_MS },
   );
   if (!response.ok) throw new Error("GitHub workflow runs request failed");
   return (await response.json()).workflow_runs?.[0] || null;
@@ -278,7 +280,10 @@ async function fetchAllReleases(source, etag) {
   while (url) {
     const headers = { ...GITHUB_API_HEADERS };
     if (firstResponse && etag) headers["If-None-Match"] = etag;
-    const response = await nativeFetch(url, { headers });
+    const response = await nativeFetch(url, {
+      headers,
+      timeout: GITHUB_REQUEST_TIMEOUT_MS,
+    });
     if (response.status === 304) return { notModified: true };
     if (!response.ok)
       throw new Error(`GitHub releases request failed: ${response.status}`);
@@ -294,7 +299,7 @@ async function fetchAllReleases(source, etag) {
 async function getLatestRelease(source) {
   const response = await nativeFetch(
     `https://api.github.com/repos/${source.repository}/releases/latest`,
-    { headers: GITHUB_API_HEADERS },
+    { headers: GITHUB_API_HEADERS, timeout: GITHUB_REQUEST_TIMEOUT_MS },
   );
   if (!response.ok) throw new Error("GitHub latest release request failed");
   return normalizeRelease(await response.json(), source);
@@ -303,30 +308,40 @@ async function getLatestRelease(source) {
 export async function getEngineReleaseVersions(engineId) {
   const source = ENGINE_RELEASE_SOURCES[engineId];
   if (!source) return [];
+  const resolveVersions = async (versions) => {
+    const available = filterVersionsForCurrentPlatform(
+      await withNightlyVersion(versions, source),
+      engineId,
+    );
+    if (!source.itch) return available;
+    try {
+      const itchVersion = await getItchRelease(source.itch);
+      return itchVersion
+        ? [
+            itchVersion,
+            ...available.filter(
+              (version) => version.version !== itchVersion.version,
+            ),
+          ]
+        : available;
+    } catch {
+      return available;
+    }
+  };
   const cached = readCache(engineId);
   if (
     cached?.versions?.length &&
     Date.now() - cached.savedAt < CACHE_FRESH_MS
   ) {
-    return filterVersionsForCurrentPlatform(
-      await withNightlyVersion(
-        withLatestReleaseOption(cached.versions, engineId),
-        source,
-      ),
-      engineId,
-    );
+    return resolveVersions(withLatestReleaseOption(cached.versions, engineId));
   }
 
   try {
     const result = await fetchAllReleases(source, cached?.etag);
     if (result.notModified && cached?.versions?.length) {
       writeCache(engineId, { ...cached, savedAt: Date.now() });
-      return filterVersionsForCurrentPlatform(
-        await withNightlyVersion(
-          withLatestReleaseOption(cached.versions, engineId),
-          source,
-        ),
-        engineId,
+      return resolveVersions(
+        withLatestReleaseOption(cached.versions, engineId),
       );
     }
     const versions = withLatestReleaseOption(
@@ -335,26 +350,21 @@ export async function getEngineReleaseVersions(engineId) {
         .filter(Boolean),
       engineId,
     );
-    if (versions.length === 0 && !source.nightly) return [];
+    if (versions.length === 0 && !source.nightly && !source.itch) return [];
     writeCache(engineId, {
       versions,
       etag: result.etag,
       savedAt: Date.now(),
     });
-    return filterVersionsForCurrentPlatform(
-      await withNightlyVersion(versions, source),
-      engineId,
-    );
+    return resolveVersions(versions);
   } catch (error) {
-    return cached?.versions?.length
-      ? filterVersionsForCurrentPlatform(
-          await withNightlyVersion(
-            withLatestReleaseOption(cached.versions, engineId),
-            source,
-          ),
-          engineId,
-        )
-      : withNightlyVersion([], source);
+    return (
+      cached?.versions?.length
+        ? resolveVersions(withLatestReleaseOption(cached.versions, engineId))
+        : getLatestRelease(source).then((latest) =>
+            resolveVersions(latest ? [latest] : []),
+          )
+    ).catch(() => resolveVersions([]));
   }
 }
 

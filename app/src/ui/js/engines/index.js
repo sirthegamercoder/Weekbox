@@ -1,7 +1,12 @@
 import { appEvents } from "../../../backend/core/routing/events.service.js";
 import { getSelectedEngine } from "../../../backend/core/state/state.service.js";
 import { engineDropdown } from "./dropdown.js";
-import { getTargetLink, getTargetSize } from "./utils.js";
+import {
+  getTargetItchPlatform,
+  getTargetLink,
+  getTargetSize,
+} from "./utils.js";
+import { resolveItchDownloadUrl } from "../../../backend/providers/itch/itch-release.provider.js";
 import { FS } from "../../../backend/services/filesystem.js";
 import { downloadEngine } from "./downloadEngine.js";
 import { modsMaster } from "./modsMasterClass.js";
@@ -9,6 +14,21 @@ import { rememberInstalledEngineBuild } from "./engineUpdateService.js";
 import { engineInstallToast } from "./engineInstallToast.js";
 import { appSettings } from "../../../backend/core/system/settings.service.js";
 import { i18n, localizeProgressStatus, t } from "../i18n/index.js";
+
+async function showBaseGameSupportWarning() {
+  if (appSettings.get("baseGameSupportWarningShown")) return;
+  try {
+    await Neutralino.os.showMessageBox(
+      t("engines.baseGameSupportTitle"),
+      t("engines.baseGameSupportMessage"),
+      "OK",
+      "WARNING",
+    );
+    appSettings.set("baseGameSupportWarningShown", true);
+  } catch (error) {
+    console.warn("Could not show Base Game support warning:", error);
+  }
+}
 
 export const enginesView = {
   async init() {
@@ -28,6 +48,7 @@ export const enginesView = {
       }
     }
     if (!FS.isInitialized) await FS.init();
+    if (engine.id === "vslice") await showBaseGameSupportWarning();
     engineDropdown.setup(engine, (version) => {
       this.currentVersion = version;
       this.updateButtonState();
@@ -182,8 +203,8 @@ export const enginesView = {
         );
       });
     } else {
-      const downloadUrl = getTargetLink(versionData);
-      if (!downloadUrl) {
+      const targetItchPlatform = getTargetItchPlatform(versionData);
+      if (!getTargetLink(versionData) && !targetItchPlatform) {
         activeBtn.textContent = t("engines.unsupportedOs");
         activeBtn.disabled = true;
         if (dlUI) dlUI.style.display = "none";
@@ -193,6 +214,20 @@ export const enginesView = {
       activeBtn.disabled = false;
       activeBtn.addEventListener("click", async () => {
         activeBtn.disabled = true;
+        let downloadUrl = getTargetLink(versionData);
+        if (!downloadUrl && targetItchPlatform) {
+          try {
+            downloadUrl = await resolveItchDownloadUrl(
+              versionData.itch,
+              targetItchPlatform,
+            );
+          } catch (error) {
+            console.error("Could not resolve Itch.io download:", error);
+            activeBtn.disabled = false;
+            activeBtn.textContent = t("engines.retryDownload");
+            return;
+          }
+        }
         this.activeInstall = {
           engineId: this.currentEngine.id,
           version: this.currentVersion,

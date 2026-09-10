@@ -8,10 +8,11 @@ import { setupDropdown } from "../../utils/components/dropdown.component.js";
 import { t } from "../i18n/index.js";
 
 function getVersionLabel(versionData) {
+  const label = versionData.label || versionData.version;
   const usesWine =
     (window.NL_OS === "Linux" || window.NL_OS === "Darwin") &&
     getTargetPlatform(versionData) === "win";
-  return usesWine ? `${versionData.version} (Wine)` : versionData.version;
+  return usesWine ? `${label} (Wine)` : label;
 }
 
 export const engineDropdown = {

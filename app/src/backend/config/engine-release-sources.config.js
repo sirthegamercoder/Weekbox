@@ -1,6 +1,14 @@
 export const ENGINE_RELEASE_SOURCES = {
   vslice: {
     repository: "FunkinCrew/Funkin",
+    itch: {
+      pageUrl: "https://ninja-muffin24.itch.io/funkin",
+      platforms: {
+        win: /windows/i,
+        lin: /linux/i,
+        mac: /mac/i,
+      },
+    },
     assets: {
       win: [/^funkin-windows-(?:64bit|x64)\.zip$/i],
       lin: [/linux/i],

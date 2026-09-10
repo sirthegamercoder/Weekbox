@@ -186,7 +186,14 @@ var _LibraryMaintenanceService = class _LibraryMaintenanceService {
       const executable = await this.findExecutable(
         `${this.getModsPath()}/${folderName}`,
       );
-      if (!executable) continue;
+      if (!executable) {
+        if (mod.engineId !== "executable") continue;
+        mod.engineId = null;
+        mod.engineVersion = null;
+        mod.engineLocked = false;
+        changed = true;
+        continue;
+      }
       const needsMigration =
         mod.engineId !== "executable" ||
         mod.engineVersion ||

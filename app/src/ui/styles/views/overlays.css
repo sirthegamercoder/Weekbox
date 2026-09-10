@@ -244,14 +244,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .error-overlay,
-  .error-content {
-    transition: none;
-    animation: none;
-  }
-}
-
 .diagnostic-consent-overlay {
   position: fixed;
   inset: 0;
@@ -565,18 +557,6 @@
 
   .language-picker-panel {
     padding: 22px 18px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .language-picker-overlay,
-  .language-picker-panel,
-  .language-picker-option,
-  .language-picker-option::after,
-  .language-picker-option::before,
-  .language-picker-flag,
-  .language-picker-continue {
-    transition: none;
   }
 }
 

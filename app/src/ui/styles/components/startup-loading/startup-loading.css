@@ -8,22 +8,50 @@
   align-items: center;
   padding: 28px 36px 36px;
   background-color: var(--surface);
-  background-image:
-    linear-gradient(
-      180deg,
-      rgba(14, 20, 21, 0.4) 0%,
-      rgba(14, 20, 21, 0) 30%,
-      rgba(14, 20, 21, 0.75) 100%
-    ),
-    url("../assets/img/loading.webp");
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
   opacity: 1;
   transition: opacity 220ms ease;
   user-select: none;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+.startup-loading::before,
+.startup-loading::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.startup-loading::before {
+  inset: -24px;
+  z-index: 0;
+  background: url("../assets/img/loading.webp") center / cover no-repeat;
+  filter: blur(14px) brightness(0.42);
+  transform: scale(1.12);
+  animation: startup-loading-background-reveal 4.5s
+    cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.startup-loading::after {
+  z-index: 0;
+  background: var(--scrim);
+  opacity: 0.38;
+  animation: startup-loading-overlay-reveal 4s cubic-bezier(0.16, 1, 0.3, 1)
+    forwards;
+}
+
+@keyframes startup-loading-background-reveal {
+  to {
+    filter: blur(0) brightness(1);
+    transform: scale(1);
+  }
+}
+
+@keyframes startup-loading-overlay-reveal {
+  to {
+    opacity: 0;
+  }
 }
 
 .startup-loading--complete {
@@ -46,11 +74,17 @@
 }
 
 .startup-loading__bottom {
-  width: min(100%, 640px);
+  position: fixed;
+  right: 0;
+  bottom: 12px;
+  left: 0;
+  z-index: 1;
+  width: auto;
+  padding: 0 18px 7px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 1;
 }
 
 .startup-loading__info {
@@ -86,22 +120,48 @@
 }
 
 .startup-loading__progress-container {
-  width: 100%;
-  height: 6px;
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: auto;
+  height: 12px;
   overflow: hidden;
-  border: 1px solid var(--outline-variant);
-  border-radius: 999px;
-  background: rgba(27, 33, 34, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  position: relative;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface-container-highest);
 }
 
 .startup-loading__progress-bar {
   width: 0%;
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--primary), #a8f0ff);
-  box-shadow: 0 0 8px rgba(130, 211, 224, 0.45);
+  position: relative;
+  overflow: hidden;
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 55%, transparent);
   transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.startup-loading__progress-bar::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-image: linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--on-primary) 22%, transparent) 25%,
+    transparent 25%,
+    transparent 50%,
+    color-mix(in srgb, var(--on-primary) 22%, transparent) 50%,
+    color-mix(in srgb, var(--on-primary) 22%, transparent) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 32px 32px;
+  animation: startup-loading-barber-shop-motion 500ms linear infinite;
+}
+
+@keyframes startup-loading-barber-shop-motion {
+  to {
+    transform: translateX(-32px);
+  }
 }

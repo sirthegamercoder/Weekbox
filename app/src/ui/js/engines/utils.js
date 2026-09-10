@@ -15,11 +15,26 @@ export function getTargetPlatform(versionData) {
           ? ["macarm", "mac"]
           : ["mac", "mac64", "macarm"],
   };
-  return firstAvailablePlatform(
-    versionData,
-    platforms[window.NL_OS] || [],
-    fallbackPlatform,
+  return (
+    firstAvailablePlatform(
+      versionData,
+      platforms[window.NL_OS] || [],
+      fallbackPlatform,
+    ) ||
+    firstAvailablePlatform(
+      versionData?.itch?.uploads,
+      platforms[window.NL_OS] || [],
+    ) ||
+    (platforms[window.NL_OS] || []).find((platform) =>
+      versionData?.itch?.platforms?.includes(platform),
+    ) ||
+    null
   );
+}
+
+export function getTargetItchPlatform(versionData) {
+  const platform = getTargetPlatform(versionData);
+  return platform && versionData?.itch ? platform : null;
 }
 
 export function getTargetLink(versionData) {
@@ -29,7 +44,10 @@ export function getTargetLink(versionData) {
 
 export function getTargetSize(versionData) {
   const platform = getTargetPlatform(versionData);
-  const size = Number(versionData?.assetSizes?.[platform]);
+  const size = Number(
+    versionData?.assetSizes?.[platform] ||
+      versionData?.itch?.uploads?.[platform]?.size,
+  );
   return size > 0 ? size : 0;
 }
 

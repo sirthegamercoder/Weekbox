@@ -193,7 +193,8 @@ async function finalizeInstall(
         engineVersion: null,
       }
     : installMetadata;
-  const resolvedEngineId = isExecutable ? "executable" : engineId;
+  const resolvedEngineId =
+    isExecutable ? "executable" : engineId === "executable" ? null : engineId;
   await FS.api.remove(downloadMarkerPath);
   await FS.api.write(`${targetModFolder}/mod_url.txt`, downloadUrl);
   await FS.saveInstalledMod(modId, modName, {

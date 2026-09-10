@@ -65,6 +65,7 @@ settingDefinitions = {
   checkAppUpdatesOnStartup: { type: "boolean", defaultValue: true },
   wineCommand: { type: "string", defaultValue: null, nullable: true },
   firstRunStorageSetupComplete: { type: "boolean", defaultValue: false },
+  baseGameSupportWarningShown: { type: "boolean", defaultValue: false },
 };
 
 appSettings = {

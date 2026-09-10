@@ -13,7 +13,6 @@ function getGoogleDriveFileId(url) {
     str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/i) ||
     str.match(/[?&]id=([a-zA-Z0-9_-]+)/i) ||
     str.match(/\/d\/([a-zA-Z0-9_-]+)/i) ||
-    str.match(/\/folders\/([a-zA-Z0-9_-]+)/i) ||
     str.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/i);
   if (directMatch && directMatch[1]) {
     return directMatch[1];

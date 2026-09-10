@@ -435,19 +435,6 @@
   display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sidebar,
-  .sidebar__collapse-btn,
-  .sidebar__btn,
-  .sidebar__section-toggle > i {
-    transition: none;
-  }
-
-  .sidebar__section-resizer::before {
-    transition: none;
-  }
-}
-
 /* Marquee Effect */
 .sidebar__marquee-container {
   flex: 1 1 auto;

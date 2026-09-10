@@ -514,7 +514,11 @@ export const sidebar = {
             console.error(err);
             btn.querySelector(".sidebar__marquee-container").innerHTML =
               `<span class="sidebar__marquee-text">${displayName}</span>`;
-            alert(t("network.loadVersionFailed", { name: displayName }));
+            this.updateEngineMarquee(btn);
+            setTimeout(
+              () => alert(t("network.loadVersionFailed", { name: displayName })),
+              0,
+            );
           }
         });
         wrapper.appendChild(btn);

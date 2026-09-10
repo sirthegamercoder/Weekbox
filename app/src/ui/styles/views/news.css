@@ -350,11 +350,3 @@
     padding: 24px;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .news-view__refresh,
-  .news-detail-modal__content,
-  .news-detail-modal__body {
-    transition: none;
-  }
-}

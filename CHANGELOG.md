@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Base Game now shows a support warning on first launch.
+
+### Changed
+
+- Simplified the startup screen with a smooth background reveal and bottom bar.
+
+### Fixed
+
+- V-Slice now uses the current Itch.io version and downloads it in WeekBox.
+
+## [2.1.17] - 2026-09-09
+
+### Fixed
+
+- Mods are only marked executable if they contain an executable.
+- V-Slice now includes the Itch.io 0.8.6 version.
+- Google Drive folders are ignored as download links.
+- Engine lists recover better when GitHub is temporarily unavailable.
+
 ## [2.1.16] - 2026-08-29
 
 ### Fixed
@@ -935,7 +956,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Downloads for Windows, Linux, and macOS.
 - Packages for x64, ARM64, ARMHF, and Universal Macs where available.
 
-[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.16...HEAD
+[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.17...HEAD
+[2.1.17]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.16...v2.1.17
 [2.1.16]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.15...v2.1.16
 [2.1.15]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.14...v2.1.15
 [2.1.13]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.12...v2.1.13

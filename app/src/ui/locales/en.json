@@ -141,6 +141,8 @@
   "engines.retryDownload": "Retry download",
   "engines.cancelled": "Cancelled",
   "engines.rollingBack": "Rolling back…",
+  "engines.baseGameSupportTitle": "Base Game support",
+  "engines.baseGameSupportMessage": "If the Funkin Crew changes the game, moves its downloads, or changes GitHub, Itch.io, or another service, Base Game support could break or become impossible. We will do our best to keep it working.",
   "engineManager.noEngines": "No engines installed yet.",
   "engineManager.connectToCheckUpdates": "Connect to the internet to check for updates",
   "engineManager.checkEngineUpdates": "Check {{name}} for updates",
