@@ -402,6 +402,8 @@ async function startApp() {
     disableProductionRefreshShortcuts();
 
     const handleAppExit = async () => {
+      if (appExitStarted) return;
+      appExitStarted = true;
       engineUpdateService.stopScheduledChecks();
       let timeoutHandle;
       try {
@@ -409,6 +411,7 @@ async function startApp() {
           Promise.allSettled([
             downloadEngine.cleanupAll?.(),
             downloadMod.cleanupAll?.(),
+            appSettings.writeQueue,
           ]),
           new Promise((resolve) => {
             timeoutHandle = setTimeout(resolve, 1500);
@@ -423,6 +426,22 @@ async function startApp() {
       } catch {}
     };
 
+    let allowAppExit = false;
+    let appExitStarted = false;
+    if (window.NL_OS === "Windows") {
+      Neutralino.events.on("trayMenuItemClicked", async (event) => {
+        const id = event.detail?.id;
+        if (id === "weekbox-show") {
+          await focusWeekBoxWindow();
+          return;
+        }
+        if (id === "weekbox-quit") {
+          allowAppExit = true;
+          await handleAppExit();
+        }
+      });
+    }
+
     window.addEventListener("beforeunload", () => {
       engineUpdateService.stopScheduledChecks();
       downloadEngine.cleanupAll?.().catch(() => {});
@@ -430,7 +449,10 @@ async function startApp() {
     });
 
     Neutralino.events.on("windowClose", async () => {
-      if (document.getElementById("app-update-modal")?.hidden === false) return;
+      if (!allowAppExit && window.NL_OS === "Windows") {
+        await Neutralino.window.hide();
+        return;
+      }
       await handleAppExit();
     });
     startupLoader.setPhase(t("startup.loadingPreferences"), 20);
@@ -445,6 +467,19 @@ async function startApp() {
     );
     await appSettings.init(settingsDataPath);
     i18n.init();
+    if (window.NL_OS === "Windows") {
+      await Neutralino.os
+        .setTray({
+          icon: "/app/assets/icons/launcher-icon.png",
+          menuItems: [
+            { id: "weekbox-show", text: t("tray.showWeekBox") },
+            { id: "weekbox-quit", text: t("tray.quitWeekBox") },
+          ],
+        })
+        .catch((error) =>
+          console.warn("Could not set WeekBox tray icon", error),
+        );
+    }
     if (!appSettings.get("firstRunLanguageSetupComplete")) {
       await firstRunLanguageModal.show();
     }

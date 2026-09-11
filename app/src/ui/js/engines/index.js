@@ -49,7 +49,12 @@ async function showBaseGameSupportWarning() {
     modal.hidden = false;
     requestAnimationFrame(() => {
       modal.classList.add("show");
-      activateCheckoutDialog(modal, modal.querySelector(".base-game-warning-dialog"), confirm, finish);
+      activateCheckoutDialog(
+        modal,
+        modal.querySelector(".base-game-warning-dialog"),
+        confirm,
+        finish,
+      );
     });
   });
 }
@@ -114,7 +119,10 @@ export const enginesView = {
       if (activeTask.state === "installing")
         launchBtn.textContent = t("downloads.installing");
       this.renderDownloadProgress(activeTask.progressInfo);
-      engineInstallToast.hide(this.activeInstall);
+      engineInstallToast.show(this.activeInstall, () =>
+        this.cancelInstall(this.activeInstall),
+      );
+      engineInstallToast.update(this.activeInstall, activeTask.progressInfo);
       return;
     }
     this.activeInstall = null;
@@ -259,6 +267,7 @@ export const enginesView = {
         };
         const install = this.activeInstall;
         const installKey = `${install.engineId}:${install.version}`;
+        engineInstallToast.show(install, () => this.cancelInstall(install));
         this.setupDownloadActions(activeBtn, downloadActions);
         this.renderDownloadProgress({
           progress: 0,
@@ -298,7 +307,7 @@ export const enginesView = {
           return;
         }
         if (success) {
-          if (!this.isVisible) engineInstallToast.complete(finishedInstall);
+          engineInstallToast.complete(finishedInstall);
           await rememberInstalledEngineBuild(
             this.currentEngine.id,
             versionData,
@@ -322,11 +331,10 @@ export const enginesView = {
             }, 500); // Pequeño retraso para evitar bugs de la UI
           }
         } else {
-          if (!this.isVisible)
-            engineInstallToast.error(
-              finishedInstall,
-              t("engines.installationFailed"),
-            );
+          engineInstallToast.error(
+            finishedInstall,
+            t("engines.installationFailed"),
+          );
           if (dlText)
             dlText.textContent = `0% - ${t("engines.downloadFailed")}`;
           if (dlTextSizer)
@@ -364,18 +372,23 @@ export const enginesView = {
     if (!downloadActions || !this.activeInstall) return;
     downloadActions.hidden = false;
     const cancelBtn = document.getElementById("cancel-engine-download-btn");
-    const { engineId, version } = this.activeInstall;
     if (!cancelBtn) {
       activeBtn.textContent = t("downloads.downloading");
       return;
     }
     cancelBtn.onclick = async () => {
-      cancelBtn.disabled = true;
-      this.cancelledInstall = `${engineId}:${version}`;
-      this.rollbackPromise = this.animateRollback();
-      await downloadEngine.cancel(engineId, version);
+      await this.cancelInstall(this.activeInstall);
     };
     activeBtn.textContent = t("downloads.downloading");
+  },
+  async cancelInstall(install) {
+    if (!install) return;
+    const cancelBtn = document.getElementById("cancel-engine-download-btn");
+    if (cancelBtn) cancelBtn.disabled = true;
+    this.cancelledInstall = `${install.engineId}:${install.version}`;
+    this.rollbackPromise = this.animateRollback();
+    engineInstallToast.cancel(install);
+    await downloadEngine.cancel(install.engineId, install.version);
   },
   updateInstallState(state) {
     const activeBtn = document.getElementById("launch-engine-btn");

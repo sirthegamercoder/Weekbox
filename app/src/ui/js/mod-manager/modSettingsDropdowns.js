@@ -2,7 +2,10 @@ import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
 import { setupDropdown } from "../../utils/components/dropdown.component.js";
 import { escapeHtml } from "./modSettingsTemplates.js";
 import { getEngineLabel, t } from "../i18n/index.js";
-import { getEngineVersionOrder } from "../../../backend/config/engine-preferences.js";
+import {
+  getEngineVersionName,
+  getEngineVersionOrder,
+} from "../../../backend/config/engine-preferences.js";
 
 export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
   const assignableEngines = Object.entries(ENGINE_DETAILS).filter(
@@ -98,6 +101,10 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
       return;
 
     const selectedEngineId = engineSelect.value;
+    const getVersionLabel = (version) => {
+      const name = getEngineVersionName(selectedEngineId, version, version);
+      return name === version ? version : `${name} (${version})`;
+    };
     if (!selectedEngineId || selectedEngineId === "executable") {
       updateVersionVisibility(false);
       versionSelect.value = "";
@@ -137,18 +144,19 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
       `<option value="">${t("import.anyVersion")}</option>`,
       ...versions.map(
         (version) =>
-          `<option value="${escapeHtml(version)}" ${version === validSelectedVersion ? "selected" : ""}>${escapeHtml(version)}</option>`,
+          `<option value="${escapeHtml(version)}" ${version === validSelectedVersion ? "selected" : ""}>${escapeHtml(getVersionLabel(version))}</option>`,
       ),
     ].join("");
     versionMenu.innerHTML = [
       `<button type="button" data-version="" class="${!validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${!validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${t("import.anyVersion")}</button>`,
       ...versions.map(
         (version) =>
-          `<button type="button" data-version="${escapeHtml(version)}" class="${version === validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${version === validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${escapeHtml(version)}</button>`,
+          `<button type="button" data-version="${escapeHtml(version)}" class="${version === validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${version === validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${escapeHtml(getVersionLabel(version))}</button>`,
       ),
     ].join("");
-    versionSelected.textContent =
-      validSelectedVersion || t("import.anyVersion");
+    versionSelected.textContent = validSelectedVersion
+      ? getVersionLabel(validSelectedVersion)
+      : t("import.anyVersion");
     versionSelect.value = validSelectedVersion;
   };
 

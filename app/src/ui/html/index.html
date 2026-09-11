@@ -1365,7 +1365,13 @@
   </div>
 </template>
 <template id="tpl-engine-manager-empty">
-  <div class="empty-mods-state" style="margin: auto;" data-i18n="engineManager.noEngines">No engines installed</div>
+  <div
+    class="empty-mods-state"
+    style="margin: auto"
+    data-i18n="engineManager.noEngines"
+  >
+    No engines installed
+  </div>
 </template>
 <template id="tpl-engine-manager-carousel">
   <div class="em-carousel-viewport">
@@ -1381,7 +1387,13 @@
 </template>
 <template id="tpl-engine-column-header">
   <div class="engine-column-header">
-    <img src="assets/icons/exe.png" alt="" class="engine-col-icon" crossorigin="anonymous" onerror="this.src='assets/icons/exe.png'" />
+    <img
+      src="assets/icons/exe.png"
+      alt=""
+      class="engine-col-icon"
+      crossorigin="anonymous"
+      onerror="this.src = 'assets/icons/exe.png'"
+    />
     <span class="engine-col-name"></span>
   </div>
 </template>
@@ -1395,6 +1407,9 @@
       <button class="engine-action-btn engine-dir-btn" type="button">
         <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
       </button>
+      <button class="engine-action-btn engine-rename-btn" type="button">
+        <i class="fa-solid fa-pen" aria-hidden="true"></i>
+      </button>
       <button class="engine-action-btn engine-delete-btn" type="button">
         <i class="fa-solid fa-trash" aria-hidden="true"></i>
       </button>
@@ -1404,17 +1419,64 @@
     </div>
   </div>
 </template>
+<template id="tpl-engine-rename-modal">
+  <div class="engine-rename-overlay" hidden>
+    <section
+      class="engine-rename-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="engine-rename-title"
+    >
+      <h2 id="engine-rename-title" data-i18n="engineManager.renameVersion">
+        Rename installed version
+      </h2>
+      <label for="engine-rename-input" data-i18n="engineManager.versionName">
+        Name
+      </label>
+      <input id="engine-rename-input" class="engine-rename-input" type="text" />
+      <div class="engine-rename-actions">
+        <button
+          type="button"
+          class="engine-rename-cancel"
+          data-i18n="common.cancel"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="engine-rename-save"
+          data-i18n="common.save"
+        >
+          Save
+        </button>
+      </div>
+    </section>
+  </div>
+</template>
 <template id="tpl-engine-update-modal">
   <div id="engine-update-modal" class="engine-update-overlay" hidden>
-    <section class="engine-update-modal" role="dialog" aria-modal="true" aria-labelledby="engine-update-title">
+    <section
+      class="engine-update-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="engine-update-title"
+    >
       <div class="engine-update-heading">
         <img class="engine-update-mark" alt="" />
         <h2 id="engine-update-title"></h2>
       </div>
-      <p class="engine-update-copy" data-i18n="engineUpdates.detected">An update is available for this engine.</p>
+      <p class="engine-update-copy" data-i18n="engineUpdates.detected">
+        An update is available for this engine.
+      </p>
       <div class="engine-update-build"></div>
       <div class="engine-update-actions">
-        <button type="button" class="engine-update-later" data-i18n="storage.notNow">Not now</button>
+        <button
+          type="button"
+          class="engine-update-later"
+          data-i18n="storage.notNow"
+        >
+          Not now
+        </button>
         <button type="button" class="engine-update-confirm">
           <span data-i18n="engineUpdates.updateEngine">Update engine</span>
           <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
@@ -1435,13 +1497,21 @@
         <i class="fa-solid fa-triangle-exclamation"></i>
       </div>
       <div class="base-game-warning-copy">
-        <h2 id="base-game-warning-title" data-i18n="engines.baseGameSupportTitle">
+        <h2
+          id="base-game-warning-title"
+          data-i18n="engines.baseGameSupportTitle"
+        >
           Base Game support
         </h2>
         <p data-i18n="engines.baseGameSupportMessage">
-          Base Game support could change if the Funkin Crew changes the game or its services.
+          Base Game support could change if the Funkin Crew changes the game or
+          its services.
         </p>
-        <button class="base-game-warning-confirm" type="button" data-i18n="common.ok">
+        <button
+          class="base-game-warning-confirm"
+          type="button"
+          data-i18n="common.ok"
+        >
           OK
         </button>
       </div>
@@ -1453,13 +1523,17 @@
   <span class="engine-close-label" data-i18n="common.close">Close</span>
 </template>
 <template id="tpl-release-notes-loading">
-  <p style="color: var(--text-muted);" data-i18n="engines.releaseNotesLoading">Loading release notes...</p>
+  <p style="color: var(--text-muted)" data-i18n="engines.releaseNotesLoading">
+    Loading release notes...
+  </p>
 </template>
 <template id="tpl-release-notes-empty">
   <p><em data-i18n="engines.noReleaseNotes">No release notes available</em></p>
 </template>
 <template id="tpl-release-notes-failed">
-  <p><em data-i18n="engines.releaseNotesFailed">Failed to load release notes</em></p>
+  <p>
+    <em data-i18n="engines.releaseNotesFailed">Failed to load release notes</em>
+  </p>
 </template>
 <template id="tpl-home-carousel-slide">
   <div class="carousel-slide">
@@ -1489,14 +1563,18 @@
   <section class="home-offline-panel" role="status">
     <i class="fa-solid fa-wifi" aria-hidden="true"></i>
     <h2 data-i18n="network.youAreOffline">You are offline</h2>
-    <p data-i18n="network.offlineDetails">Connect to the internet to browse and download mods.</p>
+    <p data-i18n="network.offlineDetails">
+      Connect to the internet to browse and download mods.
+    </p>
   </section>
 </template>
 <template id="tpl-search-empty-state">
-  <div class="dropdown-item empty-state" data-i18n="search.noRecent">No recent searches</div>
+  <div class="dropdown-item empty-state" data-i18n="search.noRecent">
+    No recent searches
+  </div>
 </template>
 <template id="tpl-search-loading-item">
-  <div class="dropdown-item" style="cursor:default;">
+  <div class="dropdown-item" style="cursor: default">
     <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
     <span data-i18n="common.loading">Loading...</span>
   </div>
@@ -1517,30 +1595,75 @@
 </template>
 <template id="tpl-dependency-review-modal">
   <div id="dependency-review-modal" class="dependency-review-overlay" hidden>
-    <section class="dependency-review-modal" role="dialog" aria-modal="true" aria-labelledby="dependency-review-title">
+    <section
+      class="dependency-review-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dependency-review-title"
+    >
       <div class="dependency-review-heading">
         <i class="fa-solid fa-puzzle-piece" aria-hidden="true"></i>
-        <div><h2 id="dependency-review-title" data-i18n="dependencies.installTitle">Install Dependencies</h2></div>
+        <div>
+          <h2
+            id="dependency-review-title"
+            data-i18n="dependencies.installTitle"
+          >
+            Install Dependencies
+          </h2>
+        </div>
       </div>
       <div class="dependency-review-list"></div>
       <div class="dependency-review-actions">
-        <button type="button" class="dependency-review-cancel" data-i18n="common.cancel">Cancel</button>
-        <button type="button" class="dependency-review-confirm" data-i18n="dependencies.installSelected">Install selected</button>
+        <button
+          type="button"
+          class="dependency-review-cancel"
+          data-i18n="common.cancel"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="dependency-review-confirm"
+          data-i18n="dependencies.installSelected"
+        >
+          Install selected
+        </button>
       </div>
     </section>
   </div>
 </template>
 <template id="tpl-download-choice-modal">
   <div id="download-choice-modal" class="dependency-review-overlay" hidden>
-    <section class="dependency-review-modal" role="dialog" aria-modal="true" aria-labelledby="download-choice-title">
+    <section
+      class="dependency-review-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="download-choice-title"
+    >
       <div class="dependency-review-heading">
         <i class="fa-solid fa-download" aria-hidden="true"></i>
-        <div><h2 id="download-choice-title" data-i18n="downloads.chooseTitle">Choose Download</h2></div>
+        <div>
+          <h2 id="download-choice-title" data-i18n="downloads.chooseTitle">
+            Choose Download
+          </h2>
+        </div>
       </div>
       <div class="dependency-review-list download-choice-list"></div>
       <div class="dependency-review-actions">
-        <button type="button" class="dependency-review-cancel" data-i18n="common.cancel">Cancel</button>
-        <button type="button" class="dependency-review-confirm" data-i18n="common.continue">Continue</button>
+        <button
+          type="button"
+          class="dependency-review-cancel"
+          data-i18n="common.cancel"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="dependency-review-confirm"
+          data-i18n="common.continue"
+        >
+          Continue
+        </button>
       </div>
     </section>
   </div>

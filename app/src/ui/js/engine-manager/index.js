@@ -16,6 +16,7 @@ import {
 } from "../engines/utils.js";
 import { resolveItchDownloadUrl } from "../../../backend/providers/itch/itch-release.provider.js";
 import { downloadEngine } from "../engines/downloadEngine.js";
+import { engineInstallToast } from "../engines/engineInstallToast.js";
 import { rememberInstalledEngineBuild } from "../engines/engineUpdateService.js";
 import { fetchAndRenderReleaseNotes } from "../engines/releaseNotes.js";
 import {
@@ -29,6 +30,8 @@ import {
   setEngineOrder,
   setEngineVersionOrder,
   setPreferredEngineVersion,
+  getEngineVersionName,
+  setEngineVersionName,
 } from "../../../backend/config/engine-preferences.js";
 
 function sortableItems(container, selector) {
@@ -49,8 +52,7 @@ function normalizeEngineVersions(releases) {
         "";
       return {
         ...release,
-        version:
-          release.version || extractVersionFallback(sampleLink),
+        version: release.version || extractVersionFallback(sampleLink),
       };
     })
     .filter((release) => release.version && release.version !== "Unknown")
@@ -62,6 +64,58 @@ function normalizeEngineVersions(releases) {
         sensitivity: "base",
       });
     });
+}
+
+function getInstalledVersionLabel(engineId, version) {
+  const name = getEngineVersionName(engineId, version, version);
+  return name === version ? version : `${name} (${version})`;
+}
+
+function renameInstalledVersion(engineId, version, onSaved) {
+  const template = document.getElementById("tpl-engine-rename-modal");
+  if (!template) return;
+  const modal = template.content.firstElementChild.cloneNode(true);
+  const dialog = modal.querySelector(".engine-rename-dialog");
+  const input = modal.querySelector(".engine-rename-input");
+  const currentName = getEngineVersionName(engineId, version, version);
+  input.value = currentName;
+  input.maxLength = 80;
+  input.setAttribute("aria-label", t("engineManager.renameVersion"));
+  document.body.appendChild(modal);
+  i18n.apply(modal);
+  let finished = false;
+  const finish = (save) => {
+    if (finished) return;
+    finished = true;
+    if (save) setEngineVersionName(engineId, version, input.value, version);
+    deactivateCheckoutDialog(modal);
+    modal.classList.remove("show");
+    setTimeout(() => modal.remove(), 220);
+    onSaved?.();
+  };
+  modal
+    .querySelector(".engine-rename-cancel")
+    .addEventListener("click", () => finish(false));
+  modal
+    .querySelector(".engine-rename-save")
+    .addEventListener("click", () => finish(true));
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) finish(false);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  modal.hidden = false;
+  requestAnimationFrame(() => {
+    modal.classList.add("show");
+    activateCheckoutDialog(modal, dialog, input, () => finish(false));
+  });
 }
 
 function setupAnimatedSortable(
@@ -452,7 +506,8 @@ export const engineManagerModal = {
     back.className = "engine-download-picker__back";
     back.title = t("common.back");
     back.setAttribute("aria-label", t("common.back"));
-    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.innerHTML =
+      '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
     back.addEventListener("click", () => void this.returnToInstalledEngines());
     const title = document.createElement("h3");
     title.textContent = t("engines.select");
@@ -472,8 +527,9 @@ export const engineManagerModal = {
         const name = document.createElement("span");
         name.textContent = getEngineLabel(engineId, details.name);
         button.append(icon, name);
-        button.addEventListener("click", () =>
-          void this.showDownloadPicker(engineId, "chooser"),
+        button.addEventListener(
+          "click",
+          () => void this.showDownloadPicker(engineId, "chooser"),
         );
         grid.appendChild(button);
       });
@@ -496,11 +552,14 @@ export const engineManagerModal = {
     back.className = "engine-download-picker__back";
     back.title = t("common.back");
     back.setAttribute("aria-label", t("common.back"));
-    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
-    back.addEventListener("click", () =>
-      void (returnTo === "installed"
-        ? this.returnToInstalledEngines()
-        : this.showDownloadPicker()),
+    back.innerHTML =
+      '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.addEventListener(
+      "click",
+      () =>
+        void (returnTo === "installed"
+          ? this.returnToInstalledEngines()
+          : this.showDownloadPicker()),
     );
     const heading = document.createElement("div");
     heading.className = "engine-download-picker__identity";
@@ -521,14 +580,11 @@ export const engineManagerModal = {
     notes.className = "engine-download-picker__notes markdown-body";
     const footer = document.createElement("footer");
     footer.className = "engine-download-picker__footer";
-    const status = document.createElement("span");
-    status.className = "engine-download-picker__status";
-    status.setAttribute("role", "status");
     const download = document.createElement("button");
     download.type = "button";
     download.className = "engine-download-picker__download";
     download.textContent = t("common.download");
-    footer.append(status, download);
+    footer.append(download);
     main.append(versionsList, notes);
     panel.append(header, main, footer);
     container.replaceChildren(panel);
@@ -543,6 +599,12 @@ export const engineManagerModal = {
       button.textContent = versionData.label || versionData.version;
       button.addEventListener("click", () => {
         selected = versionData;
+        if (activeInstall?.version !== selected.version) {
+          activeInstall = null;
+          download.classList.remove("is-cancel");
+          download.textContent = t("common.download");
+          download.disabled = false;
+        }
         versionsList
           .querySelectorAll(".engine-download-picker__version")
           .forEach((option) =>
@@ -553,6 +615,19 @@ export const engineManagerModal = {
           getTargetLink(versionData),
           notes,
         );
+        const task = downloadEngine.getActiveTask(engineId, selected.version);
+        if (task) {
+          activeInstall = {
+            engineId,
+            version: selected.version,
+            name: getEngineLabel(engineId, details.name),
+          };
+          download.disabled = true;
+          download.classList.add("is-cancel");
+          download.textContent = t("common.cancel");
+          engineInstallToast.show(activeInstall, cancelInstall);
+          updateInstallProgress(task.progressInfo);
+        }
       });
       versionsList.appendChild(button);
     });
@@ -560,10 +635,54 @@ export const engineManagerModal = {
     if (selected)
       void fetchAndRenderReleaseNotes(selected, getTargetLink(selected), notes);
     download.disabled = !selected;
+    let activeInstall = null;
+    let cancelRequested = false;
+    const updateInstallProgress = (progressInfo) => {
+      if (activeInstall) engineInstallToast.update(activeInstall, progressInfo);
+    };
+    const cancelInstall = async () => {
+      if (!activeInstall) return;
+      cancelRequested = true;
+      download.disabled = true;
+      download.textContent = t("downloads.cancelling");
+      engineInstallToast.cancel(activeInstall);
+      await downloadEngine.cancel(
+        activeInstall.engineId,
+        activeInstall.version,
+      );
+      engineInstallToast.hide(activeInstall);
+    };
+    const existingTask = selected
+      ? downloadEngine.getActiveTask(engineId, selected.version)
+      : null;
+    if (existingTask && selected) {
+      activeInstall = {
+        engineId,
+        version: selected.version,
+        name: getEngineLabel(engineId, details.name),
+      };
+      download.disabled = true;
+      download.classList.add("is-cancel");
+      download.textContent = t("common.cancel");
+      engineInstallToast.show(activeInstall, cancelInstall);
+      updateInstallProgress(existingTask.progressInfo);
+    }
     download.addEventListener("click", async () => {
+      if (activeInstall) {
+        void cancelInstall();
+        return;
+      }
       if (!selected || download.disabled) return;
       download.disabled = true;
-      status.textContent = t("engines.startingDownload");
+      download.classList.add("is-cancel");
+      download.textContent = t("common.cancel");
+      cancelRequested = false;
+      activeInstall = {
+        engineId,
+        version: selected.version,
+        name: getEngineLabel(engineId, details.name),
+      };
+      engineInstallToast.show(activeInstall, cancelInstall);
       try {
         let downloadUrl = getTargetLink(selected);
         const targetPlatform = getTargetItchPlatform(selected);
@@ -578,22 +697,30 @@ export const engineManagerModal = {
           engineId,
           selected.version,
           downloadUrl,
-          (progressInfo) => {
-            const progress = Math.floor(Number(progressInfo?.progress) || 0);
-            status.textContent = `${progress}% - ${progressInfo?.status || t("engines.working")}`;
-          },
-          () => {},
+          updateInstallProgress,
+          undefined,
           { expectedSize: getTargetSize(selected) },
         );
-        if (!success) throw new Error(t("engines.installationFailed"));
+        if (!success) {
+          if (cancelRequested) return;
+          throw new Error(t("engines.installationFailed"));
+        }
         await rememberInstalledEngineBuild(engineId, selected);
-        status.textContent = t("engines.downloadCompleteExtracting");
+        engineInstallToast.complete(activeInstall);
         document.dispatchEvent(new CustomEvent("mods-updated"));
       } catch (error) {
+        if (cancelRequested) return;
         console.error("Could not download engine version", error);
-        status.textContent = t("engines.downloadFailed");
+        engineInstallToast.error(
+          activeInstall,
+          t("engines.installationFailed"),
+        );
       } finally {
-        download.disabled = false;
+        if (cancelRequested) engineInstallToast.hide(activeInstall);
+        activeInstall = null;
+        download.classList.remove("is-cancel");
+        download.textContent = t("common.download");
+        download.disabled = !selected;
       }
     });
     return panel;
@@ -634,8 +761,9 @@ export const engineManagerModal = {
     } catch (error) {
       if (requestId !== this.pickerRequestId) return;
       const panel = this.renderDownloadPicker(engineId, [], returnTo);
-      panel.querySelector(".engine-download-picker__versions").textContent =
-        t("network.noCompatibleReleases");
+      panel.querySelector(".engine-download-picker__versions").textContent = t(
+        "network.noCompatibleReleases",
+      );
       console.warn("Could not load engine versions", error);
     }
   },
@@ -666,9 +794,11 @@ export const engineManagerModal = {
       addEngineButton.className = "em-index-add engine-manager-empty-add";
       addEngineButton.title = t("engines.select");
       addEngineButton.setAttribute("aria-label", t("engines.select"));
-      addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
-      addEngineButton.addEventListener("click", () =>
-        void this.showDownloadPicker(),
+      addEngineButton.innerHTML =
+        '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+      addEngineButton.addEventListener(
+        "click",
+        () => void this.showDownloadPicker(),
       );
       container.appendChild(addEngineButton);
       return;
@@ -734,9 +864,9 @@ export const engineManagerModal = {
     };
 
     const syncEngineOrder = () => {
-      const orderedIds = [...indexContainer.querySelectorAll(".em-index-icon")].map(
-        (icon) => icon.dataset.engineId,
-      );
+      const orderedIds = [
+        ...indexContainer.querySelectorAll(".em-index-icon"),
+      ].map((icon) => icon.dataset.engineId);
       orderedIds.forEach((engineId) => {
         const card = [...track.children].find(
           (candidate) => candidate.dataset.engineId === engineId,
@@ -825,6 +955,7 @@ export const engineManagerModal = {
         engineId,
         orderedVersions,
       );
+      const canonicalName = getEngineLabel(engineId, details.name);
       const saveVersionOrder = () =>
         setEngineVersionOrder(
           engineId,
@@ -863,7 +994,9 @@ export const engineManagerModal = {
           item = itemTpl.content.firstElementChild.cloneNode(true);
           item.dataset.version = version;
           item.draggable = false;
-          item.querySelector(".version-text").textContent = version;
+          const versionText = item.querySelector(".version-text");
+          versionText.textContent = getInstalledVersionLabel(engineId, version);
+          versionText.title = `${canonicalName} · ${version}`;
           const updateBtn = item.querySelector(".engine-update-btn");
           if (!hasUpdate && updateBtn) {
             updateBtn.remove();
@@ -891,6 +1024,9 @@ export const engineManagerModal = {
               : t("engineManager.uninstallVersion"),
           );
           deleteBtn.disabled = running;
+          const renameBtn = item.querySelector(".engine-rename-btn");
+          renameBtn.title = t("engineManager.renameVersion");
+          renameBtn.setAttribute("aria-label", renameBtn.title);
         } else {
           item = document.createElement("div");
           item.className = "version-item";
@@ -898,7 +1034,8 @@ export const engineManagerModal = {
           item.draggable = false;
           const versionText = document.createElement("span");
           versionText.className = "version-text";
-          versionText.textContent = version;
+          versionText.textContent = getInstalledVersionLabel(engineId, version);
+          versionText.title = `${canonicalName} · ${version}`;
           const actions = document.createElement("div");
           actions.className = "version-actions";
 
@@ -946,6 +1083,15 @@ export const engineManagerModal = {
           deleteIcon.className = "fa-solid fa-trash";
           deleteBtn.appendChild(deleteIcon);
 
+          const renameBtn = document.createElement("button");
+          renameBtn.className = "engine-action-btn engine-rename-btn";
+          renameBtn.type = "button";
+          renameBtn.title = t("engineManager.renameVersion");
+          renameBtn.setAttribute("aria-label", renameBtn.title);
+          const renameIcon = document.createElement("i");
+          renameIcon.className = "fa-solid fa-pen";
+          renameBtn.appendChild(renameIcon);
+
           const preferredBtn = document.createElement("button");
           preferredBtn.className = "engine-action-btn engine-preferred-btn";
           preferredBtn.type = "button";
@@ -953,7 +1099,7 @@ export const engineManagerModal = {
           preferredIcon.className = "fa-solid fa-star";
           preferredIcon.setAttribute("aria-hidden", "true");
           preferredBtn.appendChild(preferredIcon);
-          actions.append(dirBtn, deleteBtn, preferredBtn);
+          actions.append(dirBtn, renameBtn, deleteBtn, preferredBtn);
           item.append(versionText, actions);
         }
 
@@ -1034,6 +1180,15 @@ export const engineManagerModal = {
             } catch (e) {}
           });
 
+        item
+          .querySelector(".engine-rename-btn")
+          .addEventListener("click", (e) => {
+            e.stopPropagation();
+            renameInstalledVersion(engineId, version, () =>
+              this.loadInstalledEngines(),
+            );
+          });
+
         const deleteBtn = item.querySelector(".engine-delete-btn");
         deleteBtn?.addEventListener("click", async (e) => {
           e.stopPropagation();
@@ -1112,9 +1267,7 @@ export const engineManagerModal = {
           : ["ArrowRight", "ArrowDown"].includes(event.key)
             ? 1
             : 0;
-        const target = direction
-          ? icons[iconIndex + direction]
-          : null;
+        const target = direction ? icons[iconIndex + direction] : null;
         if (!target) return;
         event.preventDefault();
         reorderEngines(indexIcon, target, direction < 0);
@@ -1132,9 +1285,11 @@ export const engineManagerModal = {
     addEngineButton.className = "em-index-add";
     addEngineButton.title = t("engines.select");
     addEngineButton.setAttribute("aria-label", t("engines.select"));
-    addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
-    addEngineButton.addEventListener("click", () =>
-      void this.showDownloadPicker(),
+    addEngineButton.innerHTML =
+      '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+    addEngineButton.addEventListener(
+      "click",
+      () => void this.showDownloadPicker(),
     );
     indexContainer.appendChild(addEngineButton);
     // 5. L gica de c lculo y actualizaci n del Carrusel
@@ -1149,14 +1304,13 @@ export const engineManagerModal = {
       Array.from(track.children).forEach((col, idx) => {
         const active = idx === this.currentIndex;
         col.classList.toggle("active", active);
-        col.querySelector(".engine-version-add")?.toggleAttribute(
-          "disabled",
-          !active,
-        );
+        col
+          .querySelector(".engine-version-add")
+          ?.toggleAttribute("disabled", !active);
       });
       Array.from(indexContainer.querySelectorAll(".em-index-icon")).forEach(
         (icon, idx) => {
-        icon.classList.toggle("active", idx === this.currentIndex);
+          icon.classList.toggle("active", idx === this.currentIndex);
         },
       );
       btnPrev.style.display = this.currentIndex === 0 ? "none" : "flex";

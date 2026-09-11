@@ -47,21 +47,7 @@ export const downloadEngine = {
     await this.stopProcess(task);
 
     await FS.api.remove(task.tempFilePath).catch(() => {});
-
-    const vPath = task.engineDir;
-    try {
-      if (window.NL_OS === "Windows") {
-        await Neutralino.os
-          .execCommand(`rmdir /S /Q "${vPath.replace(/\//g, "\\")}"`, {
-            background: true,
-          })
-          .catch(() => {});
-      } else {
-        await Neutralino.os
-          .execCommand(`rm -rf "${vPath}"`, { background: true })
-          .catch(() => {});
-      }
-    } catch (e) {}
+    await FS.api.remove(task.stagingDir).catch(() => {});
   },
 
   async cancel(engineId, version) {
@@ -101,6 +87,32 @@ export const downloadEngine = {
     return describeExtractedFiles({ directory, limit });
   },
 
+  async replaceInstalledDirectory(task) {
+    const { engineId, version, engineDir, stagingDir } = task;
+    const engineRoot = `${FS.enginesPath}/${engineId}`;
+    const safeVersion = String(version).replace(/[^a-z0-9._-]/gi, "_");
+    const backupDir = `${engineRoot}/.previous-${safeVersion}-${Date.now()}`;
+
+    // Junctions used for mod injection can prevent a Windows directory move.
+    await FS.cleanupEngineMods(engineId, version).catch(() => {});
+    if (await FS.api.exists(engineDir)) {
+      await FS.api.move(engineDir, backupDir);
+      task.backupDir = backupDir;
+    }
+
+    try {
+      await FS.api.move(stagingDir, engineDir);
+      task.committed = true;
+    } catch (error) {
+      await FS.api.remove(engineDir).catch(() => {});
+      if (task.backupDir && (await FS.api.exists(task.backupDir))) {
+        await FS.api.move(task.backupDir, engineDir).catch(() => {});
+      }
+      task.backupDir = null;
+      throw error;
+    }
+  },
+
   async install(
     engineId,
     version,
@@ -120,11 +132,17 @@ export const downloadEngine = {
 
     const enginesBasePath = FS.enginesPath;
     const engineDir = `${enginesBasePath}/${engineId}/${version}`;
+    if (FS.isEngineRunning(engineId, version)) {
+      throw new Error("Close the engine before reinstalling this version.");
+    }
     const archiveExtension =
       window.NL_OS === "Darwin" && /\.dmg(?:$|[?#])/i.test(downloadUrl)
         ? ".dmg"
         : ".zip";
-    const tempFilePath = `${enginesBasePath}/temp_${engineId}_${version}${archiveExtension}`;
+    const safeVersion = String(version).replace(/[^a-z0-9._-]/gi, "_");
+    const taskId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const stagingDir = `${enginesBasePath}/${engineId}/.install-${safeVersion}-${taskId}`;
+    const tempFilePath = `${enginesBasePath}/.temp-${engineId}-${safeVersion}-${taskId}${archiveExtension}`;
     const taskKey = this.getTaskKey(engineId, version);
 
     if (this.activeTasks.has(taskKey)) return false;
@@ -134,6 +152,7 @@ export const downloadEngine = {
       pid: null,
       tempFilePath,
       engineDir,
+      stagingDir,
       progressInfo: { status: t("engines.preparingEnvironment"), progress: 0 },
       onStateChange,
     };
@@ -151,9 +170,9 @@ export const downloadEngine = {
       updateProgress(t("engines.preparingEnvironment"), 0);
       await FS.api.ensureDir(enginesBasePath);
       await FS.api.ensureDir(`${enginesBasePath}/${engineId}`);
-      await FS.api.ensureDir(engineDir);
+      await FS.api.ensureDir(stagingDir);
 
-      await FS.api.write(`${engineDir}/.downloading`, "1");
+      await FS.api.write(`${stagingDir}/.downloading`, "1");
       this.throwIfCancelled(task);
       updateProgress(t("downloads.connecting"), 2);
       const archiveStats = await downloadArchive({
@@ -173,7 +192,7 @@ export const downloadEngine = {
       updateProgress(t("engines.downloadCompleteExtracting"), 98);
       await extractArchive({
         archivePath: tempFilePath,
-        destinationPath: engineDir,
+        destinationPath: stagingDir,
         getTask: () => this.activeTasks.get(taskKey),
         onEntry: (file) =>
           updateProgress(t("engines.extractingFile", { file }), 98),
@@ -182,11 +201,11 @@ export const downloadEngine = {
       this.throwIfCancelled(task);
 
       updateProgress(t("engines.organizingFiles"), 99);
-      await this.flattenEngineDir(engineDir, () => task.cancelled);
+      await this.flattenEngineDir(stagingDir, () => task.cancelled);
       this.throwIfCancelled(task);
 
       updateProgress(t("engines.checkingRunnable"), 99);
-      const executablePath = await FS.findExecutable(engineDir);
+      const executablePath = await FS.findExecutable(stagingDir);
       if (!executablePath) {
         const searchError = FS.getExecutableSearchError();
         if (searchError) {
@@ -194,7 +213,7 @@ export const downloadEngine = {
             `WeekBox could not access the engine folder after extraction: ${searchError}`,
           );
         }
-        const extractedFiles = await this.describeExtractedFiles(engineDir);
+        const extractedFiles = await this.describeExtractedFiles(stagingDir);
         throw new Error(
           `The downloaded archive does not contain a runnable engine. Extracted files: ${extractedFiles}`,
         );
@@ -212,10 +231,11 @@ export const downloadEngine = {
 
       updateProgress(t("engines.cleaningTemporaryFiles"), 99);
       await FS.api.remove(tempFilePath).catch(() => {});
-      await FS.api.remove(`${engineDir}/.downloading`).catch(() => {});
+      await FS.api.remove(`${stagingDir}/.downloading`).catch(() => {});
       this.throwIfCancelled(task);
 
       updateProgress(t("engines.settingUpMods"), 99);
+      await this.replaceInstalledDirectory(task);
       const injectionResults = await FS.injectModsIntoEngine(engineId, version);
       this.throwIfCancelled(task);
       injectionResults
@@ -226,6 +246,7 @@ export const downloadEngine = {
 
       updateProgress(t("engines.completed"), 100);
       this.notifyState(task, "completed");
+      await FS.api.remove(task.backupDir).catch(() => {});
       this.activeTasks.delete(taskKey);
 
       return true;
@@ -243,22 +264,13 @@ export const downloadEngine = {
 
       await FS.api.remove(tempFilePath).catch(() => {});
 
-      try {
-        if (window.NL_OS === "Windows") {
-          await Neutralino.os.execCommand(
-            `rmdir /S /Q "${engineDir.replace(/\//g, "\\")}"`,
-            { background: true },
-          );
-        } else {
-          await Neutralino.os.execCommand(`rm -rf "${engineDir}"`, {
-            background: true,
-          });
-        }
-      } catch (e) {}
+      if (!task.committed) await FS.api.remove(stagingDir).catch(() => {});
 
       if (!task.cancelled) {
         this.notifyState(task, "error");
       }
+
+      if (task.committed) await FS.api.remove(task.backupDir).catch(() => {});
 
       this.activeTasks.delete(taskKey);
       return false;
