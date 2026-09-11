@@ -13,6 +13,10 @@ import { syncWindowsProtocolRegistration } from "../../../backend/core/system/wi
 import { sidebar } from "../sidebar.js";
 import { getLocaleCoverage, i18n, LANGUAGES, t } from "../i18n/index.js";
 import { firstRunLanguageModal } from "../firstRunLanguageModal.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 const appUpdates = new AppUpdateController(appUpdater);
 const storageMoveFeedback = new StorageMoveFeedback(toastSystem);
@@ -683,6 +687,12 @@ export const configModal = {
     this.loadSettingsToUI();
 
     modal.style.display = "flex";
+    activateCheckoutDialog(
+      modal,
+      modal.querySelector(".config-content"),
+      modal.querySelector("#config-close-btn"),
+      () => this.close(),
+    );
     requestAnimationFrame(() => modal.classList.add("show"));
   },
 
@@ -691,9 +701,10 @@ export const configModal = {
     if (!modal) return;
 
     sidebar.syncActive();
+    deactivateCheckoutDialog(modal);
     modal.classList.remove("show");
     setTimeout(() => {
       modal.style.display = "none";
-    }, 300);
+    }, 260);
   },
 };

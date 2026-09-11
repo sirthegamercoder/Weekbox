@@ -60,7 +60,7 @@ const appUpdateModal = {
         settled = true;
         deactivateCheckoutDialog(overlay);
         overlay.classList.remove("show");
-        setTimeout(() => (overlay.hidden = true), 180);
+        setTimeout(() => (overlay.hidden = true), 260);
         resolve(confirmed);
       };
 

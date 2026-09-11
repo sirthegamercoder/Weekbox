@@ -1,11 +1,16 @@
 import { t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 export const wineModal = {
   close() {
     const modal = document.getElementById("wine-missing-modal");
     if (!modal) return;
+    deactivateCheckoutDialog(modal);
     modal.classList.remove("show");
-    setTimeout(() => modal.remove(), 220);
+    setTimeout(() => modal.remove(), 260);
   },
 
   show() {
@@ -40,8 +45,13 @@ export const wineModal = {
     });
 
     document.body.appendChild(modal);
+    activateCheckoutDialog(
+      modal,
+      modal,
+      modal.querySelector(".app-update-install"),
+      () => this.close(),
+    );
     requestAnimationFrame(() => modal.classList.add("show"));
-    modal.querySelector(".app-update-install").focus();
   },
 };
 

@@ -7,6 +7,10 @@ import { modManagerTemplates } from "./templates.js";
 import { openFilterSortModal } from "./filterSortModal.js";
 import { sidebar } from "../sidebar.js";
 import { i18n, t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 export const modManagerModal = {
   typeFilters: { include: [], exclude: [] },
@@ -288,6 +292,12 @@ export const modManagerModal = {
 
     sidebar.setActive(sidebar.modManagerBtn);
     modal.style.display = "flex";
+    activateCheckoutDialog(
+      modal,
+      modal.querySelector(".mod-manager-content"),
+      modal.querySelector("#mod-manager-search-input"),
+      () => this.close(),
+    );
     requestAnimationFrame(() => modal.classList.add("show"));
     this.renderPendingInstallCards();
 
@@ -326,10 +336,11 @@ export const modManagerModal = {
     if (!modal) return;
     this.engineTooltip?.classList.remove("is-visible");
     sidebar.syncActive();
+    deactivateCheckoutDialog(modal);
     modal.classList.remove("show");
     setTimeout(() => {
       modal.style.display = "none";
-    }, 300);
+    }, 260);
   },
 
   async loadInstalledMods(force = false) {

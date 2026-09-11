@@ -9,6 +9,10 @@ import {
 } from "./modSettingsTemplates.js";
 import { networkStatus } from "../../../backend/core/system/network-status.service.js";
 import { t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 function setupTagEditor({ overlay, mod, readOnly }) {
   const tagInput = overlay.querySelector(".mod-settings-tag-input");
@@ -210,6 +214,7 @@ export const modSettingsModal = {
     overlay.setAttribute("aria-labelledby", "mod-settings-title");
     overlay.innerHTML = loadingContent();
     document.body.appendChild(overlay);
+    activateCheckoutDialog(overlay, overlay, null, () => this.close());
     requestAnimationFrame(() => overlay.classList.add("show"));
 
     let localCover;
@@ -378,6 +383,7 @@ export const modSettingsModal = {
         if (this.savingModId === mod.id) this.savingModId = null;
       }
     });
+    activateCheckoutDialog(overlay, overlay, nameInput, () => this.close());
     return true;
   },
 
@@ -386,6 +392,10 @@ export const modSettingsModal = {
     this.activeModId = null;
     this.dropdowns?.destroy();
     this.dropdowns = null;
-    document.querySelector(".mod-settings-overlay")?.remove();
+    const overlay = document.querySelector(".mod-settings-overlay");
+    if (!overlay) return;
+    deactivateCheckoutDialog(overlay);
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 260);
   },
 };

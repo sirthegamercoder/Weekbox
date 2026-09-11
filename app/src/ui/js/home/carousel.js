@@ -187,6 +187,7 @@ export const homeCarousel = {
       );
 
       this.setupControls();
+      this.setupMotionPause();
       this.updateDots();
       this.startAutoSlide();
     } catch (error) {
@@ -230,6 +231,18 @@ export const homeCarousel = {
         event.shiftKey ? this.nextGroup() : this.nextSlide(),
       );
     }
+  },
+
+  setupMotionPause() {
+    const carousel = document.getElementById("featured-carousel");
+    if (!carousel || carousel.dataset.motionPauseBound) return;
+    carousel.dataset.motionPauseBound = "true";
+    carousel.addEventListener("pointerenter", () => this.stopAutoSlide());
+    carousel.addEventListener("pointerleave", () => this.startAutoSlide());
+    carousel.addEventListener("focusin", () => this.stopAutoSlide());
+    carousel.addEventListener("focusout", (event) => {
+      if (!carousel.contains(event.relatedTarget)) this.startAutoSlide();
+    });
   },
 
   updateDots() {
@@ -296,7 +309,13 @@ export const homeCarousel = {
 
   startAutoSlide() {
     this.stopAutoSlide();
-    if (this.totalSlides <= 1) return;
+    const carousel = document.getElementById("featured-carousel");
+    if (
+      this.totalSlides <= 1 ||
+      carousel?.matches(":hover") ||
+      carousel?.contains(document.activeElement)
+    )
+      return;
     this.slideInterval = setInterval(() => this.nextSlide(), 5000);
   },
 

@@ -3,6 +3,10 @@ import { FS } from "../../../backend/services/filesystem.js";
 import { setupModSettingsDropdowns } from "./modSettingsDropdowns.js";
 import { escapeHtml } from "./modSettingsTemplates.js";
 import { t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 const DEFAULT_COVER = "assets/img/placeholder-mini.jpg";
 
@@ -79,6 +83,12 @@ export const localModImportModal = {
     this.overlay.setAttribute("aria-labelledby", "local-mod-import-title");
     document.body.appendChild(this.overlay);
     this.renderFolderStep();
+    activateCheckoutDialog(
+      this.overlay,
+      this.overlay,
+      this.overlay.querySelector(".local-mod-import-close"),
+      () => this.close(),
+    );
     requestAnimationFrame(() => this.overlay?.classList.add("show"));
   },
 
@@ -90,8 +100,9 @@ export const localModImportModal = {
     this.overlay = null;
     this.previousFocus = null;
     if (!overlay) return;
+    deactivateCheckoutDialog(overlay, restoreFocus);
     overlay.classList.remove("show");
-    setTimeout(() => overlay.remove(), 180);
+    setTimeout(() => overlay.remove(), 260);
     if (restoreFocus && focusTarget?.isConnected) focusTarget.focus();
   },
 
@@ -408,17 +419,10 @@ export const localModImportModal = {
         </footer>
       </form>`;
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => {
-      overlay.classList.add("show");
-      overlay.querySelector("input")?.focus();
-    });
-    const returnFocus = this.overlay?.querySelector(
-      ".local-mod-import-gamebanana",
-    );
     const close = () => {
+      deactivateCheckoutDialog(overlay);
       overlay.classList.remove("show");
-      setTimeout(() => overlay.remove(), 180);
-      if (returnFocus?.isConnected) returnFocus.focus();
+      setTimeout(() => overlay.remove(), 260);
     };
     const status = overlay.querySelector(".local-mod-gamebanana-status");
     overlay
@@ -470,6 +474,13 @@ export const localModImportModal = {
         submit.disabled = false;
       }
     });
+    activateCheckoutDialog(
+      overlay,
+      overlay,
+      overlay.querySelector("input"),
+      close,
+    );
+    requestAnimationFrame(() => overlay.classList.add("show"));
   },
 
   async import(event, { nameInput }) {

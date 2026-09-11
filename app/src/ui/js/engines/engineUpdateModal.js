@@ -1,5 +1,9 @@
 import { getTargetPlatform } from "./utils.js";
 import { i18n, t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 function ensureModal() {
   let overlay = document.getElementById("engine-update-modal");
@@ -85,26 +89,26 @@ export const engineUpdateModal = {
       const confirm = overlay.querySelector(".engine-update-confirm");
       const later = overlay.querySelector(".engine-update-later");
       const finish = (result) => {
+        deactivateCheckoutDialog(overlay);
         overlay.classList.remove("show");
         overlay.removeEventListener("click", onOverlayClick);
-        document.removeEventListener("keydown", onKeydown);
-        setTimeout(() => (overlay.hidden = true), 180);
+        setTimeout(() => (overlay.hidden = true), 260);
         resolve(result);
       };
       const onOverlayClick = (event) => {
         if (event.target === overlay) finish("dismissed");
       };
-      const onKeydown = (event) => {
-        if (event.key === "Escape") finish("dismissed");
-      };
-
       confirm.onclick = () => finish("update");
       later.onclick = () => finish("skip");
       overlay.hidden = false;
       requestAnimationFrame(() => overlay.classList.add("show"));
       overlay.addEventListener("click", onOverlayClick);
-      document.addEventListener("keydown", onKeydown);
-      confirm.focus();
+      activateCheckoutDialog(
+        overlay,
+        overlay.querySelector(".engine-update-modal"),
+        confirm,
+        () => finish("dismissed"),
+      );
     });
   },
 };

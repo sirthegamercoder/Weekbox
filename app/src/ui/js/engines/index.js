@@ -14,20 +14,44 @@ import { rememberInstalledEngineBuild } from "./engineUpdateService.js";
 import { engineInstallToast } from "./engineInstallToast.js";
 import { appSettings } from "../../../backend/core/system/settings.service.js";
 import { i18n, localizeProgressStatus, t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 async function showBaseGameSupportWarning() {
   if (appSettings.get("baseGameSupportWarningShown")) return;
-  try {
-    await Neutralino.os.showMessageBox(
-      t("engines.baseGameSupportTitle"),
-      t("engines.baseGameSupportMessage"),
-      "OK",
-      "WARNING",
-    );
-    appSettings.set("baseGameSupportWarningShown", true);
-  } catch (error) {
-    console.warn("Could not show Base Game support warning:", error);
-  }
+  const template = document.getElementById("tpl-base-game-warning-modal");
+  if (!template) return;
+  const modal = template.content.firstElementChild.cloneNode(true);
+  document.body.appendChild(modal);
+  i18n.apply(modal);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      deactivateCheckoutDialog(modal);
+      modal.classList.remove("show");
+      setTimeout(() => {
+        modal.hidden = true;
+        modal.remove();
+        appSettings.set("baseGameSupportWarningShown", true);
+        resolve();
+      }, 260);
+    };
+    const confirm = modal.querySelector(".base-game-warning-confirm");
+    confirm.addEventListener("click", finish);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) finish();
+    });
+    modal.hidden = false;
+    requestAnimationFrame(() => {
+      modal.classList.add("show");
+      activateCheckoutDialog(modal, modal.querySelector(".base-game-warning-dialog"), confirm, finish);
+    });
+  });
 }
 
 export const enginesView = {

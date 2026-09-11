@@ -305,6 +305,7 @@ export const cardRenderer = {
         visibilityBtn.title = locked
           ? message
           : t("modManager.toggleVisibility");
+        visibilityBtn.setAttribute("aria-label", visibilityBtn.title);
       });
     };
 

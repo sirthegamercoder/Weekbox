@@ -1,6 +1,10 @@
 import { setupDropdown } from "../../utils/components/dropdown.component.js";
 import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
 import { getEngineLabel, t } from "../i18n/index.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
 
 const SORT_OPTIONS = [
   ["added-desc", "modManager.lastAdded", "fa-clock"],
@@ -41,7 +45,7 @@ function createMultiDropdown(label, options, selectedFilters, emptyLabel) {
     const option = document.createElement("div");
     option.className = "custom-option mod-manager-filter-option";
     option.dataset.value = value;
-    option.innerHTML = `${iconPath ? `<img src="${iconPath}" alt="">` : `<i class="fa-solid ${iconClass || "fa-filter"}" aria-hidden="true"></i>`}<span>${text(labelText)}</span><span class="mod-manager-filter-option-actions"><button type="button" data-action="include" title="Include ${text(labelText)}"><i class="fa-solid fa-check" aria-hidden="true"></i></button><button type="button" data-action="exclude" title="Exclude ${text(labelText)}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></span>`;
+    option.innerHTML = `${iconPath ? `<img src="${iconPath}" alt="">` : `<i class="fa-solid ${iconClass || "fa-filter"}" aria-hidden="true"></i>`}<span>${text(labelText)}</span><span class="mod-manager-filter-option-actions"><button type="button" data-action="include" title="Include ${text(labelText)}" aria-label="Include ${text(labelText)}"><i class="fa-solid fa-check" aria-hidden="true"></i></button><button type="button" data-action="exclude" title="Exclude ${text(labelText)}" aria-label="Exclude ${text(labelText)}"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></span>`;
     option.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
@@ -143,10 +147,12 @@ export function openFilterSortModal({
   controls.append(typeDropdown.dropdown, engineDropdown.dropdown, sortDropdown.dropdown);
 
   const close = () => {
+    deactivateCheckoutDialog(overlay);
     typeDropdown.destroy();
     engineDropdown.destroy();
     sortDropdown.destroy();
-    overlay.remove();
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 260);
   };
   panel.querySelector(".mod-manager-filter-dismiss").addEventListener("click", close);
   panel.querySelector(".mod-manager-filter-reset").addEventListener("click", () => {
@@ -165,11 +171,13 @@ export function openFilterSortModal({
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) close();
   });
-  overlay.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") close();
-  });
   overlay.append(panel);
   document.body.append(overlay);
+  activateCheckoutDialog(
+    overlay,
+    panel,
+    panel.querySelector(".mod-manager-filter-dismiss"),
+    close,
+  );
   requestAnimationFrame(() => overlay.classList.add("show"));
-  panel.querySelector(".mod-manager-filter-dismiss").focus();
 }

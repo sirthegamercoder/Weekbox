@@ -8,6 +8,10 @@ import { sidebar } from "../sidebar.js";
 import { getEngineLabel, getEngineLabelKey, i18n, t } from "../i18n/index.js";
 import { errorHandler } from "../errors/errorHandler.js";
 import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "../home/modal/dialogFocus.js";
+import {
   getEngineOrder,
   getEngineVersionOrder,
   getPreferredEngineVersion,
@@ -238,6 +242,12 @@ export const engineManagerModal = {
     if (!modal) return;
     sidebar.setActive(sidebar.engineManagerBtn);
     modal.style.display = "flex";
+    activateCheckoutDialog(
+      modal,
+      modal.querySelector(".mod-manager-content"),
+      modal.querySelector("#engine-manager-close-btn"),
+      () => this.close(),
+    );
     requestAnimationFrame(() => modal.classList.add("show"));
     await this.loadInstalledEngines();
   },
@@ -245,6 +255,7 @@ export const engineManagerModal = {
     const modal = document.getElementById("engine-manager-modal");
     if (!modal) return;
     sidebar.syncActive();
+    deactivateCheckoutDialog(modal);
     modal.classList.remove("show");
     setTimeout(() => {
       modal.style.display = "none";
@@ -252,7 +263,7 @@ export const engineManagerModal = {
         this.resizeObserver.disconnect();
         this.resizeObserver = null;
       }
-    }, 300);
+    }, 260);
   },
   async loadInstalledEngines() {
     const engines = await FS.getInstalledEngines();

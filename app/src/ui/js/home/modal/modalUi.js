@@ -55,7 +55,7 @@ function hideModal() {
   modal.classList.remove("show");
   setTimeout(() => {
     modal.style.display = "none";
-  }, 300);
+  }, 260);
 }
 
 function resetModal() {

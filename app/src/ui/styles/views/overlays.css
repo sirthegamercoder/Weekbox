@@ -10,7 +10,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   opacity: 0;
-  transition: opacity 160ms ease;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .error-overlay.show {
@@ -26,13 +26,12 @@
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-  transform: scale(0.9) translateY(12px);
-  transition: transform 180ms cubic-bezier(0.22, 1.35, 0.36, 1);
+  transform: scale(0.96);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .error-overlay.show .error-content {
-  transform: scale(1) translateY(0);
-  animation: error-content-pop 260ms cubic-bezier(0.22, 1.25, 0.36, 1) both;
+  transform: scale(1);
 }
 
 .app-update-error-overlay {
@@ -48,8 +47,8 @@
 }
 
 .app-update-error-overlay .app-update-error-rail {
-  color: #80d4ff;
-  background: rgba(90, 182, 255, 0.1);
+  color: var(--info);
+  background: var(--info-container);
 }
 
 .app-update-notes {
@@ -65,15 +64,16 @@
 }
 
 .app-update-error-overlay .app-update-now {
-  border-color: rgba(128, 212, 255, 0.55);
-  background: rgba(90, 182, 255, 0.16);
+  border-color: color-mix(in srgb, var(--info) 55%, transparent);
+  background: var(--info-container);
 }
 
 .app-update-error-overlay .app-update-now:hover,
 .app-update-error-overlay .app-update-now:focus-visible {
-  border-color: #80d4ff;
-  background: rgba(90, 182, 255, 0.25);
-  outline: none;
+  border-color: var(--info);
+  background: color-mix(in srgb, var(--info) 25%, transparent);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .error-rail {
@@ -115,9 +115,10 @@
 
 .error-close:hover,
 .error-close:focus-visible {
-  background: rgba(255, 74, 74, 0.12);
-  color: #ff6b6b;
-  outline: none;
+  background: var(--danger-container);
+  color: var(--danger);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .error-summary {
@@ -192,7 +193,8 @@
 .error-action:focus-visible {
   border-color: var(--text-muted);
   background: rgba(255, 255, 255, 0.12);
-  outline: none;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
   transform: translateY(-1px);
 }
 
@@ -255,7 +257,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .diagnostic-consent-overlay.show {
@@ -271,12 +273,12 @@
   border-radius: 12px;
   background: var(--bg-panel);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-  transform: scale(0.96) translateY(12px);
-  transition: transform 180ms cubic-bezier(0.22, 1.25, 0.36, 1);
+  transform: scale(0.96);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .diagnostic-consent-overlay.show .diagnostic-consent-panel {
-  transform: scale(1) translateY(0);
+  transform: scale(1);
 }
 
 .diagnostic-consent-icon {
@@ -356,7 +358,7 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .language-picker-overlay.show {
@@ -370,12 +372,12 @@
   border-radius: 16px;
   background: var(--bg-panel);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-  transform: scale(0.96) translateY(12px);
-  transition: transform 180ms cubic-bezier(0.22, 1.25, 0.36, 1);
+  transform: scale(0.96);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .language-picker-overlay.show .language-picker-panel {
-  transform: scale(1) translateY(0);
+  transform: scale(1);
 }
 
 .language-picker-main {
@@ -586,7 +588,7 @@
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(8px);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .app-update-overlay.show {
@@ -602,12 +604,12 @@
   border-radius: 12px;
   background: var(--bg-panel);
   box-shadow: 0 20px 54px rgba(0, 0, 0, 0.54);
-  transform: scale(0.96) translateY(18px);
-  transition: transform 220ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transform: scale(0.96);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .app-update-overlay.show .app-update-content {
-  transform: scale(1) translateY(0);
+  transform: scale(1);
 }
 
 .app-update-icon {
@@ -683,7 +685,111 @@
 .app-update-install:focus-visible {
   background: #38a8e6;
 
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.base-game-warning-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.base-game-warning-overlay[hidden] {
+  display: none;
+}
+
+.base-game-warning-overlay.show {
+  opacity: 1;
+}
+
+.base-game-warning-dialog {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border-color));
+  border-radius: 16px;
+  background: var(--bg-panel);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 58%);
+  transform: scale(0.96);
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.base-game-warning-overlay.show .base-game-warning-dialog {
+  transform: scale(1);
+}
+
+.base-game-warning-icon {
+  display: grid;
+  place-items: start center;
+  padding-top: 28px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-size: 1.35rem;
+}
+
+.base-game-warning-copy {
+  padding: 25px 27px 24px;
+}
+
+.base-game-warning-label {
+  margin: 0 0 6px;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.base-game-warning-copy h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 1.4rem;
+}
+
+.base-game-warning-copy > p:not(.base-game-warning-label) {
+  margin: 14px 0 20px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.base-game-warning-confirm {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.base-game-warning-confirm:hover,
+.base-game-warning-confirm:focus-visible {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
   outline: none;
+}
+
+@media (max-width: 560px) {
+  .base-game-warning-dialog {
+    grid-template-columns: 1fr;
+  }
+
+  .base-game-warning-icon {
+    display: block;
+    padding: 16px 22px 0;
+  }
 }
 
 .app-update-actions button:disabled {

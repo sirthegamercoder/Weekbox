@@ -35,8 +35,11 @@ export const firstRunStorageModal = {
         if (settled) return;
         settled = true;
         deactivateCheckoutDialog(modal);
-        modal.remove();
-        resolve(choice);
+        modal.classList.remove("show");
+        setTimeout(() => {
+          modal.remove();
+          resolve(choice);
+        }, 260);
       };
       modal.querySelector(".first-run-storage-default").onclick = () =>
         finish("default");

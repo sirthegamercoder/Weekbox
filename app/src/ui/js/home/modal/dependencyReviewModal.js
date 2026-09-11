@@ -102,7 +102,7 @@ const dependencyReviewModal = {
         overlay.classList.remove("show");
         document.removeEventListener("keydown", onKeydown);
         deactivateCheckoutDialog(overlay);
-        setTimeout(() => (overlay.hidden = true), 180);
+        setTimeout(() => (overlay.hidden = true), 260);
         resolve(result);
       };
       const onKeydown = (event) => {

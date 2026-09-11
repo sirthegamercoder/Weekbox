@@ -2,7 +2,10 @@ import { appSettings } from "./settings.service.js";
 import { networkStatus } from "./network-status.service.js";
 import { startupLoader } from "./startup-loader.service.js";
 import { syncWindowsProtocolRegistration } from "./windows-protocol.util.js";
-import { disableProductionRefreshShortcuts } from "./production-shortcuts.util.js";
+import {
+  disableProductionRefreshShortcuts,
+  isDevelopmentRun,
+} from "./production-shortcuts.util.js";
 import { router } from "../routing/router.service.js";
 import { openLaunchDeepLink } from "../routing/deep-links.service.js";
 import { appUpdater } from "../updates/app-updater.service.js";
@@ -45,7 +48,8 @@ async function focusWeekBoxWindow() {
 }
 
 async function ensureSingleInstance() {
-  if (window.NL_OS !== "Windows") return true;
+  // The dev reloader keeps the native process alive between webview reloads.
+  if (isDevelopmentRun() || window.NL_OS !== "Windows") return true;
   const parentPid = Number(window.NL_PID);
   if (!Number.isInteger(parentPid) || parentPid <= 0) return true;
 

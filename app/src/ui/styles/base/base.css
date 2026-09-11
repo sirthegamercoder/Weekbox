@@ -98,4 +98,18 @@ body.window-unfocused::after {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  transition:
+    opacity 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-layout__content--leaving {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.995);
+}
+
+.app-layout__content--entering {
+  opacity: 0;
+  transform: translateY(6px) scale(0.995);
 }

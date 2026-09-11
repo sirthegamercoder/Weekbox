@@ -165,4 +165,4 @@ function disableProductionRefreshShortcuts() {
   });
 }
 
-export { disableProductionRefreshShortcuts };
+export { disableProductionRefreshShortcuts, isDevelopmentRun };

@@ -44,7 +44,7 @@ export const existingStorageModal = {
         setTimeout(() => {
           modal.remove();
           resolve(choice);
-        }, 220);
+        }, 260);
       };
       modal.querySelector(".error-close").onclick = () => close("cancel");
       modal.querySelector(".existing-storage-cancel").onclick = () =>

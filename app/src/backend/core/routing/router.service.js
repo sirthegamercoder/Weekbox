@@ -90,14 +90,35 @@ router = {
   },
   async loadComponent(container, path) {},
   async navigate(viewId) {
+    const navigationId = (this.navigationId || 0) + 1;
+    this.navigationId = navigationId;
     try {
       if (!this.mainContent)
         throw new Error("Main content container is missing.");
       const tpl = document.getElementById("tpl-" + viewId);
       if (tpl) {
+        const shouldAnimate =
+          this.currentViewId && this.currentViewId !== viewId;
+        if (shouldAnimate) {
+          this.mainContent.classList.add("app-layout__content--leaving");
+          await new Promise((resolve) => setTimeout(resolve, 140));
+          if (navigationId !== this.navigationId) return;
+        }
         this.mainContent.replaceChildren(tpl.content.cloneNode(true));
         i18n.apply(this.mainContent);
         this.currentViewId = viewId;
+        this.mainContent.classList.remove("app-layout__content--leaving");
+        if (shouldAnimate) {
+          this.mainContent.classList.add("app-layout__content--entering");
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              if (navigationId === this.navigationId)
+                this.mainContent.classList.remove(
+                  "app-layout__content--entering",
+                );
+            }),
+          );
+        }
         emitViewChange(viewId);
       } else {
         throw new Error("View template not found: tpl-" + viewId);
@@ -109,6 +130,10 @@ router = {
       errorMsg.style.color = "#ff4a4a";
       errorMsg.textContent = `Failed to load view: ${viewId}`;
       this.mainContent.replaceChildren(errorMsg);
+      this.mainContent.classList.remove(
+        "app-layout__content--leaving",
+        "app-layout__content--entering",
+      );
     }
   },
 };

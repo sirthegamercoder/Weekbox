@@ -255,6 +255,23 @@ export const sidebar = {
         String(Math.round(before.getBoundingClientRect().height)),
       );
     };
+    const applySectionHeight = (height, persist = false) => {
+      const available =
+        before.getBoundingClientRect().height +
+        after.getBoundingClientRect().height;
+      const boundedHeight = Math.min(
+        available - 96,
+        Math.max(96, height),
+      );
+      before.style.flex = `0 0 ${boundedHeight}px`;
+      handle.setAttribute("aria-valuenow", String(Math.round(boundedHeight)));
+      if (persist) {
+        try {
+          localStorage.setItem(storageKey, String(Math.round(boundedHeight)));
+        } catch {}
+      }
+      this.refreshEngineMarquees();
+    };
     before.addEventListener("toggle", syncAvailability);
     after.addEventListener("toggle", syncAvailability);
     syncAvailability();
@@ -305,13 +322,28 @@ export const sidebar = {
             resize.startHeight + event.clientY - resize.startY,
           ),
         );
-        resize.before.style.flex = `0 0 ${height}px`;
-        resize.handle.setAttribute("aria-valuenow", String(Math.round(height)));
+        applySectionHeight(height);
         resize.lastHeight = height;
-        this.refreshEngineMarquees();
       },
       { signal: abortController.signal },
     );
+    handle.addEventListener("keydown", (event) => {
+      if (handle.classList.contains("is-disabled")) return;
+      const step = event.shiftKey ? 32 : 8;
+      const current = before.getBoundingClientRect().height;
+      const available =
+        before.getBoundingClientRect().height +
+        after.getBoundingClientRect().height;
+      const maxHeight = Math.max(96, available - 96);
+      let nextHeight;
+      if (event.key === "ArrowUp") nextHeight = current - step;
+      else if (event.key === "ArrowDown") nextHeight = current + step;
+      else if (event.key === "Home") nextHeight = 96;
+      else if (event.key === "End") nextHeight = maxHeight;
+      else return;
+      event.preventDefault();
+      applySectionHeight(nextHeight, true);
+    });
     document.addEventListener("pointerup", stopSectionResize, {
       signal: abortController.signal,
     });

@@ -1,6 +1,22 @@
 var screen, bar, label, title, percentage, versionEl, startupLoader;
 import { t } from "../../../ui/js/i18n/index.js";
 
+const APP_REVEAL_DELAY = 260;
+const APP_REVEAL_DURATION = 560;
+
+function releaseAppIntro() {
+  window.setTimeout(() => {
+    const app = document.getElementById("app");
+    if (!app) return;
+    app.classList.remove("app-layout--intro");
+    app.classList.add("app-layout--revealing");
+    window.setTimeout(
+      () => app.classList.remove("app-layout--revealing"),
+      APP_REVEAL_DURATION,
+    );
+  }, APP_REVEAL_DELAY);
+}
+
 screen = document.getElementById("startup-loading-screen");
 bar = document.getElementById("startup-loading-progress");
 label = document.getElementById("startup-loading-label");
@@ -66,6 +82,7 @@ startupLoader = {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     this.isComplete = true;
     screen?.classList.add("startup-loading--complete");
+    releaseAppIntro();
     if (typeof document !== "undefined") {
       document.dispatchEvent(new CustomEvent("startup-loader:complete"));
     }
@@ -80,9 +97,10 @@ startupLoader = {
     if (typeof document !== "undefined") {
       document.dispatchEvent(new CustomEvent("startup-loader:complete"));
     }
-    requestAnimationFrame(() =>
-      screen?.classList.add("startup-loading--complete"),
-    );
+    requestAnimationFrame(() => {
+      screen?.classList.add("startup-loading--complete");
+      releaseAppIntro();
+    });
     window.setTimeout(() => screen?.remove(), 200);
   },
 };

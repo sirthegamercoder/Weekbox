@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Improved keyboard and focus handling across the UI.
+- Made the Mod Manager slightly larger.
+- Added a softer first-load reveal after startup finishes.
+- Staggered the app reveal after every startup loading screen.
+- Added softer page transitions, centered modal motion, and an in-app Base Game warning.
+
+### Fixed
+
+- Fix Neutralino Reloads killing the app.
+
 ## [2.1.18] - 2026-09-10
 
 ### Added

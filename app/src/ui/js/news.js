@@ -229,7 +229,7 @@ export const newsView = {
     modal.classList.remove("show");
     setTimeout(() => {
       if (!modal.classList.contains("show")) modal.style.display = "none";
-    }, 300);
+    }, 260);
   },
 
   setStatus(message, state = "") {

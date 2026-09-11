@@ -2,7 +2,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  width: var(--sidebar-width);
   background-color: var(--surface-container);
   border-right: 1px solid var(--outline-variant);
   height: 100vh;

@@ -1,10 +1,15 @@
 <template id="tpl-mainModal">
   <!-- herobrine -->
   <div class="mod-manager-overlay" id="mod-manager-modal" style="display: none">
-    <div class="mod-manager-content">
+    <div
+      class="mod-manager-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mod-manager-title"
+    >
       <header class="mod-manager-header">
         <div class="mod-manager-title-group">
-          <h2 data-i18n="common.mods">Mods</h2>
+          <h2 id="mod-manager-title" data-i18n="common.mods">Mods</h2>
           <span
             class="mod-manager-title-count"
             id="mod-manager-title-count"
@@ -56,10 +61,12 @@
           <button
             class="mod-manager-action-btn mod-manager-close-btn"
             id="mod-manager-close-btn"
-            data-i18n-attr="title:common.close"
+            type="button"
+            data-i18n-attr="title:common.close,aria-label:common.close"
             title="Close"
+            aria-label="Close"
           >
-            <i class="fa-solid fa-xmark"></i>
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
       </header>
@@ -195,26 +202,31 @@
     <div class="mod-manager-actions">
       <button
         class="mod-action-btn mod-manager-vis-btn"
-        data-i18n-attr="title:modManager.toggleVisibility"
+        type="button"
+        data-i18n-attr="title:modManager.toggleVisibility,aria-label:modManager.toggleVisibility"
         title="Toggle Visibility"
+        aria-label="Toggle visibility"
       >
-        <i class="fa-solid {{eyeIcon}}"></i>
+        <i class="fa-solid {{eyeIcon}}" aria-hidden="true"></i>
       </button>
       <button
         class="mod-action-btn mod-manager-settings-btn"
+        type="button"
         data-i18n-attr="title:modManager.settings"
         title="Mod Settings"
         aria-label="Open settings for {{modName}}"
       >
-        <i class="fa-solid fa-gear"></i>
+        <i class="fa-solid fa-gear" aria-hidden="true"></i>
       </button>
       <button
         class="mod-action-btn mod-manager-delete-btn"
+        type="button"
         data-id="{{modId}}"
         data-i18n-attr="title:modManager.delete,aria-label:modManager.delete"
         title="Delete Mod"
+        aria-label="Delete mod"
       >
-        <i class="fa-solid fa-trash"></i>
+        <i class="fa-solid fa-trash" aria-hidden="true"></i>
       </button>
     </div>
   </div>
@@ -253,7 +265,12 @@
 </template>
 <template id="tpl-config-modal">
   <div class="config-overlay" id="config-modal" style="display: none">
-    <div class="config-content">
+    <div
+      class="config-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="config-section-title"
+    >
       <aside class="config-aside">
         <div class="config-aside-header">
           <i class="fa-solid fa-gear"></i>
@@ -298,10 +315,12 @@
           <button
             class="config-close-btn"
             id="config-close-btn"
-            data-i18n-attr="title:common.close"
+            type="button"
+            data-i18n-attr="title:common.close,aria-label:common.close"
             title="Close"
+            aria-label="Close"
           >
-            <i class="fa-solid fa-xmark"></i>
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         </header>
 
@@ -776,15 +795,25 @@
             id="engine-version-dropdown"
           >
             <label data-i18n="common.version">Version</label>
-            <div class="custom-select-trigger" id="engine-version-trigger">
+            <button
+              type="button"
+              class="custom-select-trigger"
+              id="engine-version-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="engine-version-options"
+              data-i18n-attr="aria-label:common.version"
+              aria-label="Version"
+            >
               <span id="engine-version-selected" data-i18n="common.loading"
                 >Loading...</span
               >
-              <i class="fa-solid fa-chevron-up"></i>
-            </div>
+              <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+            </button>
             <div
               class="custom-options-container"
               id="engine-version-options"
+              role="listbox"
             ></div>
           </div>
         </div>
@@ -855,11 +884,11 @@
         </div>
         <div class="carousel-controls">
           <button class="carousel-btn" id="carousel-prev">
-            <i class="fa-solid fa-chevron-left"></i>
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
           </button>
           <div class="carousel-dots" id="carousel-dots"></div>
           <button class="carousel-btn" id="carousel-next">
-            <i class="fa-solid fa-chevron-right"></i>
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           </button>
         </div>
       </section>
@@ -1418,6 +1447,32 @@
         <button type="button" class="engine-update-confirm">
           <span data-i18n="engineUpdates.updateEngine">Update engine</span>
           <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+  </div>
+</template>
+<template id="tpl-base-game-warning-modal">
+  <div id="base-game-warning-modal" class="base-game-warning-overlay" hidden>
+    <section
+      class="base-game-warning-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="base-game-warning-title"
+    >
+      <div class="base-game-warning-icon" aria-hidden="true">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div class="base-game-warning-copy">
+        <p class="base-game-warning-label">Base Game</p>
+        <h2 id="base-game-warning-title" data-i18n="engines.baseGameSupportTitle">
+          Base Game support
+        </h2>
+        <p data-i18n="engines.baseGameSupportMessage">
+          Base Game support could change if the Funkin Crew changes the game or its services.
+        </p>
+        <button class="base-game-warning-confirm" type="button" data-i18n="common.ok">
+          OK
         </button>
       </div>
     </section>

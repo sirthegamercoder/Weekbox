@@ -50,7 +50,10 @@ export const engineDropdown = {
           "";
         v.version = extractVersionFallback(sampleLink);
       }
-      const optionDiv = document.createElement("div");
+      const optionDiv = document.createElement("button");
+      optionDiv.type = "button";
+      optionDiv.setAttribute("role", "option");
+      optionDiv.setAttribute("aria-selected", String(index === 0));
       optionDiv.className = "custom-option";
       if (index === 0) optionDiv.classList.add("selected");
       optionDiv.textContent = getVersionLabel(v);
@@ -60,10 +63,12 @@ export const engineDropdown = {
         const versionLabel = getVersionLabel(v);
         selectedText.textContent = versionLabel;
         badge.textContent = `${t("common.version")}: ${versionLabel}`;
-        document
-          .querySelectorAll(".custom-option")
-          .forEach((opt) => opt.classList.remove("selected"));
+        optionsContainer.querySelectorAll(".custom-option").forEach((opt) => {
+          opt.classList.remove("selected");
+          opt.setAttribute("aria-selected", "false");
+        });
         optionDiv.classList.add("selected");
+        optionDiv.setAttribute("aria-selected", "true");
 
         // Cerramos usando la nueva utilidad
         this.dropdownController?.close();
@@ -82,7 +87,9 @@ export const engineDropdown = {
     if (onVersionChanged) onVersionChanged(initialVersion.version);
 
     this.destroy(); // Limpia previos
-    this.dropdownController = setupDropdown(trigger, dropdown);
+    this.dropdownController = setupDropdown(trigger, dropdown, {
+      menuElement: optionsContainer,
+    });
   },
   destroy() {
     if (this.dropdownController) {

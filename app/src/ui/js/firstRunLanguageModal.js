@@ -1,9 +1,12 @@
 import { getLocaleCoverage, i18n, LANGUAGES, t } from "./i18n/index.js";
 import { appSettings } from "../../backend/core/system/settings.service.js";
+import {
+  activateCheckoutDialog,
+  deactivateCheckoutDialog,
+} from "./home/modal/dialogFocus.js";
 
 export const firstRunLanguageModal = {
   show({ markComplete = true } = {}) {
-    const previousFocus = document.activeElement;
     const modal = document.createElement("section");
     modal.className = "language-picker-overlay";
     modal.setAttribute("role", "dialog");
@@ -28,8 +31,6 @@ export const firstRunLanguageModal = {
         </div>
       </div>`;
 
-    const app = document.getElementById("app");
-    app?.setAttribute("inert", "");
     document.body.appendChild(modal);
     requestAnimationFrame(() => modal.classList.add("show"));
 
@@ -46,10 +47,12 @@ export const firstRunLanguageModal = {
     const finish = (locale) => {
       i18n.setLocale(locale);
       if (markComplete) appSettings.set("firstRunLanguageSetupComplete", true);
-      app?.removeAttribute("inert");
-      modal.remove();
-      previousFocus?.focus?.();
-      resolveSelection?.(locale);
+      deactivateCheckoutDialog(modal);
+      modal.classList.remove("show");
+      setTimeout(() => {
+        modal.remove();
+        resolveSelection?.(locale);
+      }, 260);
     };
 
     options.forEach((option) => {
@@ -68,23 +71,9 @@ export const firstRunLanguageModal = {
     continueButton.addEventListener("click", () => {
       if (selectedLocale) finish(selectedLocale);
     });
-    modal.addEventListener("keydown", (event) => {
-      if (event.key !== "Tab") return;
-      const focusable = options
-        .concat(continueButton)
-        .filter((item) => !item.disabled);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+    activateCheckoutDialog(modal, modal, options[0], () => {
+      finish(selectedLocale);
     });
-    options[0]?.focus();
 
     return new Promise((resolve) => {
       resolveSelection = resolve;

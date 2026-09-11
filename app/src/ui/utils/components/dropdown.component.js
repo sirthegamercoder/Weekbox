@@ -33,6 +33,24 @@ function setupDropdown(trigger, container, options = {}) {
     e.stopPropagation();
     toggle();
   };
+  const handleTriggerKeydown = (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key === "ArrowDown" && !container.classList.contains(openClass)) {
+      e.preventDefault();
+      open();
+      menuElement?.querySelector("button, [role='option'], [tabindex]")?.focus();
+    }
+  };
+  const handleMenuKeydown = (e) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    close();
+    trigger.focus();
+  };
   const handleOutsideClick = (e) => {
     if (
       !container.contains(e.target) &&
@@ -42,12 +60,16 @@ function setupDropdown(trigger, container, options = {}) {
     }
   };
   trigger.addEventListener("click", handleTriggerClick);
+  trigger.addEventListener("keydown", handleTriggerKeydown);
+  menuElement?.addEventListener("keydown", handleMenuKeydown);
   document.addEventListener("click", handleOutsideClick);
   return {
     close,
     destroy: () => {
       close();
       trigger.removeEventListener("click", handleTriggerClick);
+      trigger.removeEventListener("keydown", handleTriggerKeydown);
+      menuElement?.removeEventListener("keydown", handleMenuKeydown);
       document.removeEventListener("click", handleOutsideClick);
     },
   };

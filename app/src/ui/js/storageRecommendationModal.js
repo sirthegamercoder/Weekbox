@@ -59,7 +59,7 @@ export const storageRecommendationModal = {
         setTimeout(() => {
           modal.style.display = "none";
           resolve(choice);
-        }, 220);
+        }, 260);
       };
       modal.querySelector(".error-close").onclick = () => close("later");
       modal.querySelector(".storage-later").onclick = () => close("later");
