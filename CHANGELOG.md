@@ -7,25 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-10
+
 ### Changed
 
-- Improved keyboard and focus handling across the UI.
-- Made the Mod Manager larger.
-- Added a softer first-load reveal after startup finishes.
-- Staggered the app reveal after every startup loading screen.
-- Added an Engine Manager download picker with a right-side engine rail and add button.
-- Show matching GitHub release notes for automatically detected Itch versions.
-- Open nightly workflow and commit links in native app windows.
-- Add a direct version picker button to each installed engine list.
-- Remove the duplicate engine list from the sidebar.
-- Keep rail icon clicks on the installed version list while preserving drag-and-drop.
-- Give engine reordering a soft lifted control state instead of a browser image ghost.
-- Added softer page transitions, centered modal motion, and an in-app Base Game warning.
-- Reveal engine steps before remote versions finish loading and soften newsletter modal entry and exit.
+- Polished startup reveals, page transitions, modal motion, and focus handling.
+- Enlarged the Mod Manager.
+- Added an Engine Manager picker with engine rails, version controls, and reordering.
+- Added matching GitHub notes for automatically detected Itch releases.
+- Open nightly workflows and commit links inside the app.
+- Removed the duplicate engine list from the sidebar.
+- Remade the in-app Base Game warning.
 
 ### Fixed
 
-- Fix Neutralino Reloads killing the app.
+- Prevented Neutralino reload actions from killing the app.
 
 ## [2.1.18] - 2026-09-10
 
@@ -989,7 +985,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Downloads for Windows, Linux, and macOS.
 - Packages for x64, ARM64, ARMHF, and Universal Macs where available.
 
-[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.18...HEAD
+[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.18...v2.2.0
 [2.1.18]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.17...v2.1.18
 [2.1.17]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.16...v2.1.17
 [2.1.16]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.15...v2.1.16
