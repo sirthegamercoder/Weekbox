@@ -315,7 +315,7 @@ export async function getEngineReleaseVersions(engineId) {
     );
     if (!source.itch) return available;
     try {
-      const itchVersion = await getItchRelease(source.itch);
+      const itchVersion = await getItchRelease(source.itch, source.repository);
       return itchVersion
         ? [
             itchVersion,

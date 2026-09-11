@@ -7,6 +7,17 @@ import { networkStatus } from "../../../backend/core/system/network-status.servi
 import { sidebar } from "../sidebar.js";
 import { getEngineLabel, getEngineLabelKey, i18n, t } from "../i18n/index.js";
 import { errorHandler } from "../errors/errorHandler.js";
+import { getEngineReleaseVersions } from "../../../backend/providers/github/github-release.provider.js";
+import {
+  getTargetItchPlatform,
+  getTargetLink,
+  getTargetSize,
+  extractVersionFallback,
+} from "../engines/utils.js";
+import { resolveItchDownloadUrl } from "../../../backend/providers/itch/itch-release.provider.js";
+import { downloadEngine } from "../engines/downloadEngine.js";
+import { rememberInstalledEngineBuild } from "../engines/engineUpdateService.js";
+import { fetchAndRenderReleaseNotes } from "../engines/releaseNotes.js";
 import {
   activateCheckoutDialog,
   deactivateCheckoutDialog,
@@ -24,13 +35,44 @@ function sortableItems(container, selector) {
   return [...container.children].filter((item) => item.matches(selector));
 }
 
+function normalizeEngineVersions(releases) {
+  return releases
+    .map((release) => {
+      const sampleLink =
+        release.win64 ||
+        release.win32 ||
+        release.win ||
+        release.lin ||
+        release.mac ||
+        release.mac64 ||
+        release.macarm ||
+        "";
+      return {
+        ...release,
+        version:
+          release.version || extractVersionFallback(sampleLink),
+      };
+    })
+    .filter((release) => release.version && release.version !== "Unknown")
+    .sort((a, b) => {
+      if (a.isNightly) return -1;
+      if (b.isNightly) return 1;
+      return String(b.version).localeCompare(String(a.version), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+}
+
 function setupAnimatedSortable(
   container,
   item,
   { selector, axis = "y", onDrop },
 ) {
   let drag = null;
+  let pending = null;
   let suppressClick = false;
+  let originalEngineColor = null;
   const flipFrames = new WeakMap();
   item.draggable = false;
 
@@ -46,11 +88,20 @@ function setupAnimatedSortable(
     item.style.transform = "";
     item.style.transition = "";
     item.style.translate = "";
+    if (originalEngineColor !== null) {
+      if (originalEngineColor) {
+        item.style.setProperty("--engine-color", originalEngineColor);
+      } else {
+        item.style.removeProperty("--engine-color");
+      }
+      originalEngineColor = null;
+    }
   };
 
   const animateLayout = (previousRects) => {
     const movedItems = sortableItems(container, selector);
     movedItems.forEach((other) => {
+      if (other === item) return;
       const before = previousRects.get(other);
       if (!before) return;
       const after = other.getBoundingClientRect();
@@ -68,7 +119,7 @@ function setupAnimatedSortable(
         other,
         requestAnimationFrame(() => {
           flipFrames.delete(other);
-          if (drag) other.style.removeProperty("--engine-sort-shift");
+          other.style.removeProperty("--engine-sort-shift");
         }),
       );
     });
@@ -83,25 +134,113 @@ function setupAnimatedSortable(
       ]),
     );
     const pointer = axis === "x" ? clientX : clientY;
-    const target = sortableItems(container, selector).find((other) => {
-      const rect = other.getBoundingClientRect();
-      const midpoint =
-        (axis === "x" ? rect.left : rect.top) +
-        (axis === "x" ? rect.width : rect.height) / 2;
-      return pointer < midpoint;
-    });
-    if (target) container.insertBefore(drag.placeholder, target);
-    else container.appendChild(drag.placeholder);
-    animateLayout(previousRects);
+    const movingBackward = pointer < drag.lastPointer;
+    const movingForward = pointer > drag.lastPointer;
+    let moved = false;
+    while (true) {
+      const children = [...container.children];
+      const placeholderIndex = children.indexOf(drag.placeholder);
+      const previousItem = children
+        .slice(0, placeholderIndex)
+        .reverse()
+        .find((child) => child.matches(selector));
+      const nextItem = children
+        .slice(placeholderIndex + 1)
+        .find((child) => child.matches(selector));
+      const previousRect = previousItem?.getBoundingClientRect();
+      const nextRect = nextItem?.getBoundingClientRect();
+      const previousMidpoint = previousRect
+        ? (axis === "x" ? previousRect.left : previousRect.top) +
+          (axis === "x" ? previousRect.width : previousRect.height) / 2
+        : 0;
+      const nextMidpoint = nextRect
+        ? (axis === "x" ? nextRect.left : nextRect.top) +
+          (axis === "x" ? nextRect.width : nextRect.height) / 2
+        : 0;
+
+      if (movingBackward && previousItem && pointer <= previousMidpoint) {
+        container.insertBefore(drag.placeholder, previousItem);
+        moved = true;
+      } else if (movingForward && nextItem && pointer >= nextMidpoint) {
+        const afterNext = nextItem.nextElementSibling;
+        if (afterNext) container.insertBefore(drag.placeholder, afterNext);
+        else container.appendChild(drag.placeholder);
+        moved = true;
+      } else {
+        break;
+      }
+    }
+
+    drag.lastPointer = pointer;
+    if (moved) {
+      drag.moved = true;
+      animateLayout(previousRects);
+    }
+  };
+
+  const releasePointer = (pointerId) => {
+    if (!container.hasPointerCapture?.(pointerId)) return;
+    container.releasePointerCapture(pointerId);
+  };
+
+  const stopTracking = () => {
+    document.removeEventListener("pointermove", handlePointerMove);
+    document.removeEventListener("pointerup", handlePointerUp);
+    document.removeEventListener("pointercancel", handlePointerCancel);
+  };
+
+  const cancelPending = () => {
+    if (!pending) return;
+    const pointerId = pending.pointerId;
+    pending = null;
+    stopTracking();
+    releasePointer(pointerId);
+  };
+
+  const startDrag = (event) => {
+    if (!pending) return;
+    const { pointerId } = pending;
+    const rect = item.getBoundingClientRect();
+    const startPointer = axis === "x" ? pending.startX : pending.startY;
+    const placeholder = document.createElement("div");
+    placeholder.className = `engine-sort-placeholder ${axis}`;
+    placeholder.style.width = `${rect.width}px`;
+    placeholder.style.height = `${rect.height}px`;
+    const originalNextSibling = item.nextElementSibling;
+    item.after(placeholder);
+    originalEngineColor = item.style.getPropertyValue("--engine-color");
+    const engineColor = getComputedStyle(item)
+      .getPropertyValue("--engine-color")
+      .trim();
+    if (engineColor) item.style.setProperty("--engine-color", engineColor);
+    document.body.appendChild(item);
+    item.classList.add("is-dragging");
+    drag = {
+      pointerId,
+      lastPointer: startPointer,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      originalNextSibling,
+      placeholder,
+      moved: false,
+    };
+    pending = null;
+    item.style.position = "fixed";
+    item.style.left = `${event.clientX - drag.offsetX}px`;
+    item.style.top = `${event.clientY - drag.offsetY}px`;
+    item.style.width = `${rect.width}px`;
+    item.style.height = `${rect.height}px`;
+    item.style.zIndex = "1000";
+    item.style.pointerEvents = "none";
+    container.setPointerCapture?.(pointerId);
   };
 
   const finish = (cancelled = false) => {
     if (!drag) return;
     const currentDrag = drag;
     drag = null;
-    try {
-      item.releasePointerCapture(currentDrag.pointerId);
-    } catch {}
+    stopTracking();
+    releasePointer(currentDrag.pointerId);
 
     if (cancelled) {
       if (currentDrag.originalNextSibling?.parentNode === container) {
@@ -110,7 +249,12 @@ function setupAnimatedSortable(
           currentDrag.originalNextSibling,
         );
       } else {
-        container.appendChild(currentDrag.placeholder);
+        const endItem = [...container.children].find(
+          (child) =>
+            child !== currentDrag.placeholder && !child.matches(selector),
+        );
+        if (endItem) container.insertBefore(currentDrag.placeholder, endItem);
+        else container.appendChild(currentDrag.placeholder);
       }
     }
 
@@ -120,16 +264,19 @@ function setupAnimatedSortable(
       return;
     }
 
-    const finalRect = currentDrag.placeholder.getBoundingClientRect();
-    item.classList.add("is-settling");
-    void item.offsetWidth;
-    item.style.left = `${finalRect.left}px`;
-    item.style.top = `${finalRect.top}px`;
-    item.style.transform = "scale(1)";
     suppressClick = true;
     setTimeout(() => {
       suppressClick = false;
     }, 400);
+    const targetRect = currentDrag.placeholder.getBoundingClientRect();
+    item.classList.add("is-settling");
+    item.style.transition =
+      "left 180ms ease-out, top 180ms ease-out, transform 180ms ease-out";
+    requestAnimationFrame(() => {
+      item.style.left = `${targetRect.left}px`;
+      item.style.top = `${targetRect.top}px`;
+      item.style.transform = "scale(1) rotate(0deg)";
+    });
     setTimeout(() => {
       currentDrag.placeholder.replaceWith(item);
       clearDragStyles();
@@ -137,6 +284,59 @@ function setupAnimatedSortable(
     }, 180);
   };
 
+  function handlePointerMove(event) {
+    const active = drag || pending;
+    if (!active || event.pointerId !== active.pointerId) return;
+    if (!drag) {
+      const distance = Math.hypot(
+        event.clientX - pending.startX,
+        event.clientY - pending.startY,
+      );
+      if (distance < 5) return;
+      startDrag(event);
+    }
+    event.preventDefault();
+    item.style.left = `${event.clientX - drag.offsetX}px`;
+    item.style.top = `${event.clientY - drag.offsetY}px`;
+    movePlaceholder(event.clientX, event.clientY);
+  }
+
+  function handlePointerUp(event) {
+    if (drag?.pointerId === event.pointerId) finish();
+    else if (pending?.pointerId === event.pointerId) cancelPending();
+  }
+
+  function handlePointerCancel(event) {
+    if (drag?.pointerId === event.pointerId) finish(true);
+    else if (pending?.pointerId === event.pointerId) cancelPending();
+  }
+
+  item.addEventListener("pointerdown", (event) => {
+    const interactive = event.target.closest("button, a, input, select");
+    if (
+      drag ||
+      pending ||
+      !event.isPrimary ||
+      (event.pointerType === "mouse" && event.button !== 0) ||
+      (interactive && interactive !== item)
+    ) {
+      return;
+    }
+    pending = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    document.addEventListener("pointermove", handlePointerMove, {
+      passive: false,
+    });
+    document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("pointercancel", handlePointerCancel);
+  });
+  container.addEventListener("lostpointercapture", () => {
+    if (drag) finish(true);
+    else cancelPending();
+  });
   item.addEventListener(
     "click",
     (event) => {
@@ -147,60 +347,13 @@ function setupAnimatedSortable(
     },
     true,
   );
-  item.addEventListener("pointerdown", (event) => {
-    if (
-      (event.pointerType === "mouse" && event.button !== 0) ||
-      event.target.closest("button, a, input, select")
-    )
-      return;
-    const rect = item.getBoundingClientRect();
-    const placeholder = document.createElement("div");
-    placeholder.className = `engine-sort-placeholder ${axis}`;
-    placeholder.style.width = `${rect.width}px`;
-    placeholder.style.height = `${rect.height}px`;
-    placeholder.style.margin = getComputedStyle(item).margin;
-    const originalNextSibling = item.nextElementSibling;
-    item.after(placeholder);
-    document.body.appendChild(item);
-    item.classList.add("is-dragging");
-    item.style.position = "fixed";
-    item.style.left = `${rect.left}px`;
-    item.style.top = `${rect.top}px`;
-    item.style.width = `${rect.width}px`;
-    item.style.height = `${rect.height}px`;
-    item.style.zIndex = "1000";
-    item.style.pointerEvents = "none";
-    item.style.transform = "scale(1.04)";
-    drag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      placeholder,
-      originalNextSibling,
-      moved: false,
-    };
-    item.setPointerCapture(event.pointerId);
-  });
-  item.addEventListener("pointermove", (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const deltaX = event.clientX - drag.startX;
-    const deltaY = event.clientY - drag.startY;
-    if (!drag.moved && Math.hypot(deltaX, deltaY) < 4) return;
-    drag.moved = true;
-    event.preventDefault();
-    item.style.left = `${event.clientX - item.offsetWidth / 2}px`;
-    item.style.top = `${event.clientY - item.offsetHeight / 2}px`;
-    movePlaceholder(event.clientX, event.clientY);
-  });
-  item.addEventListener("pointerup", (event) => {
-    if (drag?.pointerId === event.pointerId) finish();
-  });
-  item.addEventListener("pointercancel", () => finish(true));
 }
 
 export const engineManagerModal = {
   currentIndex: 0,
   resizeObserver: null,
+  pickerRequestId: 0,
+  isPickerOpen: false,
   async init() {
     if (!document.getElementById("engine-manager-modal")) {
       const tpl = document.getElementById("tpl-engine-manager");
@@ -235,7 +388,7 @@ export const engineManagerModal = {
       });
     }
   },
-  async open() {
+  async open(engineId = null) {
     await this.init();
     if (!FS.isInitialized) await FS.init();
     const modal = document.getElementById("engine-manager-modal");
@@ -250,10 +403,13 @@ export const engineManagerModal = {
     );
     requestAnimationFrame(() => modal.classList.add("show"));
     await this.loadInstalledEngines();
+    if (engineId) await this.showDownloadPicker(engineId, "installed");
   },
   close() {
     const modal = document.getElementById("engine-manager-modal");
     if (!modal) return;
+    this.isPickerOpen = false;
+    this.pickerRequestId += 1;
     sidebar.syncActive();
     deactivateCheckoutDialog(modal);
     modal.classList.remove("show");
@@ -266,8 +422,222 @@ export const engineManagerModal = {
     }, 260);
   },
   async loadInstalledEngines() {
+    if (this.isPickerOpen) return;
     const engines = await FS.getInstalledEngines();
     this.render(engines);
+  },
+  async returnToInstalledEngines() {
+    const container = document.getElementById("engine-manager-modal-body");
+    if (!container) return;
+    this.isPickerOpen = false;
+    this.pickerRequestId += 1;
+    container.classList.add("engine-manager-body--switching");
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await this.loadInstalledEngines();
+    container.classList.remove("engine-manager-body--switching");
+    container.classList.add("engine-manager-body--switched");
+    requestAnimationFrame(() =>
+      container.classList.remove("engine-manager-body--switched"),
+    );
+  },
+  renderEngineChooser() {
+    const container = document.getElementById("engine-manager-modal-body");
+    if (!container) return;
+    const panel = document.createElement("section");
+    panel.className = "engine-download-picker engine-download-picker--chooser";
+    const header = document.createElement("header");
+    header.className = "engine-download-picker__header";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "engine-download-picker__back";
+    back.title = t("common.back");
+    back.setAttribute("aria-label", t("common.back"));
+    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.addEventListener("click", () => void this.returnToInstalledEngines());
+    const title = document.createElement("h3");
+    title.textContent = t("engines.select");
+    header.append(back, title);
+    const grid = document.createElement("div");
+    grid.className = "engine-download-picker__engine-grid";
+    Object.entries(ENGINE_DETAILS)
+      .filter(([engineId]) => engineId !== "executable")
+      .forEach(([engineId, details]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "engine-download-picker__engine";
+        button.dataset.engineId = engineId;
+        const icon = document.createElement("img");
+        icon.src = `assets/icons/${details.icon}`;
+        icon.alt = "";
+        const name = document.createElement("span");
+        name.textContent = getEngineLabel(engineId, details.name);
+        button.append(icon, name);
+        button.addEventListener("click", () =>
+          void this.showDownloadPicker(engineId, "chooser"),
+        );
+        grid.appendChild(button);
+      });
+    panel.append(header, grid);
+    container.replaceChildren(panel);
+  },
+  renderDownloadPicker(engineId, versions, returnTo = "chooser") {
+    const container = document.getElementById("engine-manager-modal-body");
+    if (!container) return null;
+    const details = ENGINE_DETAILS[engineId] || {
+      name: engineId,
+      icon: "exe.png",
+    };
+    const panel = document.createElement("section");
+    panel.className = "engine-download-picker";
+    const header = document.createElement("header");
+    header.className = "engine-download-picker__header";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "engine-download-picker__back";
+    back.title = t("common.back");
+    back.setAttribute("aria-label", t("common.back"));
+    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.addEventListener("click", () =>
+      void (returnTo === "installed"
+        ? this.returnToInstalledEngines()
+        : this.showDownloadPicker()),
+    );
+    const heading = document.createElement("div");
+    heading.className = "engine-download-picker__identity";
+    const icon = document.createElement("img");
+    icon.src = `assets/icons/${details.icon}`;
+    icon.alt = "";
+    const title = document.createElement("h3");
+    title.textContent = getEngineLabel(engineId, details.name);
+    heading.append(icon, title);
+    header.append(back, heading);
+
+    const main = document.createElement("div");
+    main.className = "engine-download-picker__main";
+    const versionsList = document.createElement("div");
+    versionsList.className = "engine-download-picker__versions";
+    versionsList.setAttribute("role", "listbox");
+    const notes = document.createElement("div");
+    notes.className = "engine-download-picker__notes markdown-body";
+    const footer = document.createElement("footer");
+    footer.className = "engine-download-picker__footer";
+    const status = document.createElement("span");
+    status.className = "engine-download-picker__status";
+    status.setAttribute("role", "status");
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "engine-download-picker__download";
+    download.textContent = t("common.download");
+    footer.append(status, download);
+    main.append(versionsList, notes);
+    panel.append(header, main, footer);
+    container.replaceChildren(panel);
+
+    let selected = null;
+    versions.forEach((versionData, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "engine-download-picker__version";
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(index === 0));
+      button.textContent = versionData.label || versionData.version;
+      button.addEventListener("click", () => {
+        selected = versionData;
+        versionsList
+          .querySelectorAll(".engine-download-picker__version")
+          .forEach((option) =>
+            option.setAttribute("aria-selected", String(option === button)),
+          );
+        void fetchAndRenderReleaseNotes(
+          versionData,
+          getTargetLink(versionData),
+          notes,
+        );
+      });
+      versionsList.appendChild(button);
+    });
+    selected = versions[0] || null;
+    if (selected)
+      void fetchAndRenderReleaseNotes(selected, getTargetLink(selected), notes);
+    download.disabled = !selected;
+    download.addEventListener("click", async () => {
+      if (!selected || download.disabled) return;
+      download.disabled = true;
+      status.textContent = t("engines.startingDownload");
+      try {
+        let downloadUrl = getTargetLink(selected);
+        const targetPlatform = getTargetItchPlatform(selected);
+        if (!downloadUrl && targetPlatform) {
+          downloadUrl = await resolveItchDownloadUrl(
+            selected.itch,
+            targetPlatform,
+          );
+        }
+        if (!downloadUrl) throw new Error(t("engines.unsupportedOs"));
+        const success = await downloadEngine.install(
+          engineId,
+          selected.version,
+          downloadUrl,
+          (progressInfo) => {
+            const progress = Math.floor(Number(progressInfo?.progress) || 0);
+            status.textContent = `${progress}% - ${progressInfo?.status || t("engines.working")}`;
+          },
+          () => {},
+          { expectedSize: getTargetSize(selected) },
+        );
+        if (!success) throw new Error(t("engines.installationFailed"));
+        await rememberInstalledEngineBuild(engineId, selected);
+        status.textContent = t("engines.downloadCompleteExtracting");
+        document.dispatchEvent(new CustomEvent("mods-updated"));
+      } catch (error) {
+        console.error("Could not download engine version", error);
+        status.textContent = t("engines.downloadFailed");
+      } finally {
+        download.disabled = false;
+      }
+    });
+    return panel;
+  },
+  async showDownloadPicker(engineId, returnTo = "chooser") {
+    const container = document.getElementById("engine-manager-modal-body");
+    if (!container) return;
+    this.isPickerOpen = true;
+    const requestId = ++this.pickerRequestId;
+    container.classList.add("engine-manager-body--switching");
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    if (requestId !== this.pickerRequestId) return;
+    if (!engineId) {
+      this.renderEngineChooser();
+    } else {
+      const panel = this.renderDownloadPicker(engineId, [], returnTo);
+      const loadingList = panel?.querySelector(
+        ".engine-download-picker__versions",
+      );
+      if (loadingList) loadingList.textContent = t("common.loading");
+    }
+    container.classList.remove("engine-manager-body--switching");
+    container.classList.add("engine-manager-body--switched");
+    requestAnimationFrame(() =>
+      container.classList.remove("engine-manager-body--switched"),
+    );
+    if (!engineId) return;
+    try {
+      const versions = normalizeEngineVersions(
+        await getEngineReleaseVersions(engineId),
+      );
+      if (requestId !== this.pickerRequestId) return;
+      const panel = this.renderDownloadPicker(engineId, versions, returnTo);
+      if (!versions.length && panel) {
+        panel.querySelector(".engine-download-picker__versions").textContent =
+          t("network.noCompatibleReleases");
+      }
+    } catch (error) {
+      if (requestId !== this.pickerRequestId) return;
+      const panel = this.renderDownloadPicker(engineId, [], returnTo);
+      panel.querySelector(".engine-download-picker__versions").textContent =
+        t("network.noCompatibleReleases");
+      console.warn("Could not load engine versions", error);
+    }
   },
   render(engines) {
     const container = document.getElementById("engine-manager-modal-body");
@@ -291,6 +661,16 @@ export const engineManagerModal = {
         empty.textContent = t("engineManager.noEngines");
         container.appendChild(empty);
       }
+      const addEngineButton = document.createElement("button");
+      addEngineButton.type = "button";
+      addEngineButton.className = "em-index-add engine-manager-empty-add";
+      addEngineButton.title = t("engines.select");
+      addEngineButton.setAttribute("aria-label", t("engines.select"));
+      addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+      addEngineButton.addEventListener("click", () =>
+        void this.showDownloadPicker(),
+      );
+      container.appendChild(addEngineButton);
       return;
     }
     // 1. Agrupar los engines por ID
@@ -354,7 +734,7 @@ export const engineManagerModal = {
     };
 
     const syncEngineOrder = () => {
-      const orderedIds = [...indexContainer.children].map(
+      const orderedIds = [...indexContainer.querySelectorAll(".em-index-icon")].map(
         (icon) => icon.dataset.engineId,
       );
       orderedIds.forEach((engineId) => {
@@ -364,7 +744,6 @@ export const engineManagerModal = {
         if (card) track.appendChild(card);
       });
       setEngineOrder(orderedIds);
-      sidebar.applyEngineOrder();
       const activeCard = track.querySelector(".engine-column.active");
       this.currentIndex = activeCard
         ? [...track.children].indexOf(activeCard)
@@ -449,7 +828,9 @@ export const engineManagerModal = {
       const saveVersionOrder = () =>
         setEngineVersionOrder(
           engineId,
-          [...versionsList.children].map((item) => item.dataset.version),
+          [...versionsList.querySelectorAll(".version-item")].map(
+            (item) => item.dataset.version,
+          ),
         );
       const setPreferredVersion = (version) => {
         setPreferredEngineVersion(engineId, version);
@@ -688,41 +1069,52 @@ export const engineManagerModal = {
           onDrop: saveVersionOrder,
         });
       });
+      const addVersionButton = document.createElement("button");
+      addVersionButton.type = "button";
+      addVersionButton.disabled = true;
+      addVersionButton.className = "engine-version-add";
+      addVersionButton.title = t("engines.select");
+      addVersionButton.setAttribute("aria-label", t("engines.select"));
+      addVersionButton.innerHTML =
+        '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+      addVersionButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.showDownloadPicker(engineId, "installed");
+      });
+      versionsList.appendChild(addVersionButton);
       card.appendChild(versionsList);
       track.appendChild(card);
       // -- Icono del  ndice Inferior (Pastilla) --
-      const indexIcon = document.createElement("img");
+      const indexIcon = document.createElement("button");
+      indexIcon.type = "button";
       indexIcon.className = "em-index-icon";
       indexIcon.dataset.engineId = engineId;
       indexIcon.draggable = false;
-      indexIcon.src = `assets/icons/${details.icon}`;
-      indexIcon.onerror = () => (indexIcon.src = "assets/icons/exe.png");
+      const indexImage = document.createElement("img");
+      indexImage.src = `assets/icons/${details.icon}`;
+      indexImage.alt = "";
+      indexImage.draggable = false;
+      indexImage.onerror = () => (indexImage.src = "assets/icons/exe.png");
+      indexIcon.appendChild(indexImage);
       indexIcon.title = displayName;
-      indexIcon.setAttribute("role", "button");
-      indexIcon.setAttribute("tabindex", "0");
       indexIcon.setAttribute("aria-label", displayName);
       indexIcon.addEventListener("click", () => {
-        this.currentIndex = [...indexContainer.children].indexOf(indexIcon);
+        this.currentIndex = [
+          ...indexContainer.querySelectorAll(".em-index-icon"),
+        ].indexOf(indexIcon);
         updateCarousel();
       });
       indexIcon.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        this.currentIndex = [...indexContainer.children].indexOf(indexIcon);
-        updateCarousel();
-      });
-      indexIcon.addEventListener("keydown", (event) => {
+        const icons = [...indexContainer.querySelectorAll(".em-index-icon")];
+        const iconIndex = icons.indexOf(indexIcon);
         const direction = ["ArrowLeft", "ArrowUp"].includes(event.key)
           ? -1
           : ["ArrowRight", "ArrowDown"].includes(event.key)
             ? 1
             : 0;
-        const target =
-          direction < 0
-            ? indexIcon.previousElementSibling
-            : direction > 0
-              ? indexIcon.nextElementSibling
-              : null;
+        const target = direction
+          ? icons[iconIndex + direction]
+          : null;
         if (!target) return;
         event.preventDefault();
         reorderEngines(indexIcon, target, direction < 0);
@@ -735,6 +1127,16 @@ export const engineManagerModal = {
         onDrop: syncEngineOrder,
       });
     });
+    const addEngineButton = document.createElement("button");
+    addEngineButton.type = "button";
+    addEngineButton.className = "em-index-add";
+    addEngineButton.title = t("engines.select");
+    addEngineButton.setAttribute("aria-label", t("engines.select"));
+    addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+    addEngineButton.addEventListener("click", () =>
+      void this.showDownloadPicker(),
+    );
+    indexContainer.appendChild(addEngineButton);
     // 5. L gica de c lculo y actualizaci n del Carrusel
     const updateCarousel = () => {
       const vw = viewport.clientWidth;
@@ -745,11 +1147,18 @@ export const engineManagerModal = {
         vw / 2 - cardWidth / 2 - this.currentIndex * (cardWidth + gap);
       track.style.transform = `translateX(${offset}px)`;
       Array.from(track.children).forEach((col, idx) => {
-        col.classList.toggle("active", idx === this.currentIndex);
+        const active = idx === this.currentIndex;
+        col.classList.toggle("active", active);
+        col.querySelector(".engine-version-add")?.toggleAttribute(
+          "disabled",
+          !active,
+        );
       });
-      Array.from(indexContainer.children).forEach((icon, idx) => {
+      Array.from(indexContainer.querySelectorAll(".em-index-icon")).forEach(
+        (icon, idx) => {
         icon.classList.toggle("active", idx === this.currentIndex);
-      });
+        },
+      );
       btnPrev.style.display = this.currentIndex === 0 ? "none" : "flex";
       btnNext.style.display =
         this.currentIndex === sortedEngineEntries.length - 1 ? "none" : "flex";

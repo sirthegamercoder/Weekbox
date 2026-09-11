@@ -187,14 +187,66 @@ function renderNightlyNotes(container, versionData, targetLink) {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = label;
+    link.addEventListener("click", (event) => {
+      if (!globalThis.Neutralino?.window?.create) return;
+      event.preventDefault();
+      void globalThis.Neutralino.window
+        .create(url, {
+          title: label,
+          width: 960,
+          height: 720,
+          minWidth: 640,
+          minHeight: 480,
+          maximizable: true,
+          exitProcessOnClose: true,
+        })
+        .catch((error) =>
+          console.warn("Could not open nightly link window", error),
+        );
+    });
     links.append(link);
   }
   if (links.childNodes.length) wrapper.append(links);
   container.replaceChildren(wrapper);
 }
 
-export async function fetchAndRenderReleaseNotes(versionData, targetLink) {
-  const notesContainer = document.getElementById("engine-release-notes");
+function getGitHubReleaseLookup(versionData, targetLink) {
+  const link =
+    targetLink || versionData.win || versionData.lin || versionData.mac || "";
+  const match = link.match(
+    /github\.com\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\//,
+  );
+  if (match) return { repository: `${match[1]}/${match[2]}`, tags: [match[3]] };
+  if (!versionData?.githubRepository || !versionData?.version) return null;
+  return {
+    repository: versionData.githubRepository,
+    tags: [`v${versionData.version}`, versionData.version],
+  };
+}
+
+async function fetchGitHubRelease(repository, tags) {
+  let response;
+  for (const tag of tags) {
+    response = await nativeFetch(
+      `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(tag)}`,
+      {
+        headers: {
+          Accept: "application/vnd.github.full+json",
+          "X-GitHub-Api-Version": "2026-03-10",
+        },
+      },
+    );
+    if (response.ok) return response;
+  }
+  throw new Error(`Release lookup failed: ${response?.status}`);
+}
+
+export async function fetchAndRenderReleaseNotes(
+  versionData,
+  targetLink,
+  targetContainer = document.getElementById("engine-release-notes"),
+) {
+  const notesContainer = targetContainer;
   if (!notesContainer) return;
 
   notesContainer.classList.remove("release-notes-plain");
@@ -210,13 +262,8 @@ export async function fetchAndRenderReleaseNotes(versionData, targetLink) {
     return;
   }
 
-  const link =
-    targetLink || versionData.win || versionData.lin || versionData.mac || "";
-  const match = link.match(
-    /github\.com\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\//,
-  );
-
-  if (!match) {
+  const lookup = getGitHubReleaseLookup(versionData, targetLink);
+  if (!lookup) {
     renderNotesStatus(notesContainer, "tpl-release-notes-empty", () => {
       const p = document.createElement("p");
       const em = document.createElement("em");
@@ -227,21 +274,11 @@ export async function fetchAndRenderReleaseNotes(versionData, targetLink) {
     return;
   }
 
-  const [owner, repository, tag] = match.slice(1);
-
   try {
-    const response = await nativeFetch(
-      `https://api.github.com/repos/${owner}/${repository}/releases/tags/${encodeURIComponent(tag)}`,
-      {
-        headers: {
-          Accept: "application/vnd.github.full+json",
-          "X-GitHub-Api-Version": "2026-03-10",
-        },
-      },
+    const response = await fetchGitHubRelease(
+      lookup.repository,
+      lookup.tags,
     );
-
-    if (!response.ok)
-      throw new Error(`Release lookup failed: ${response.status}`);
     const release = await response.json();
     const text = release.body || "No description.";
 

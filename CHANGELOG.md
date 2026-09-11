@@ -10,10 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Improved keyboard and focus handling across the UI.
-- Made the Mod Manager slightly larger.
+- Made the Mod Manager larger.
 - Added a softer first-load reveal after startup finishes.
 - Staggered the app reveal after every startup loading screen.
+- Added an Engine Manager download picker with a right-side engine rail and add button.
+- Show matching GitHub release notes for automatically detected Itch versions.
+- Open nightly workflow and commit links in native app windows.
+- Add a direct version picker button to each installed engine list.
+- Remove the duplicate engine list from the sidebar.
+- Keep rail icon clicks on the installed version list while preserving drag-and-drop.
+- Give engine reordering a soft lifted control state instead of a browser image ghost.
 - Added softer page transitions, centered modal motion, and an in-app Base Game warning.
+- Reveal engine steps before remote versions finish loading and soften newsletter modal entry and exit.
 
 ### Fixed
 

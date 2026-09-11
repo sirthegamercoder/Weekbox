@@ -1,5 +1,5 @@
 import { gameBananaApi } from "../../../../backend/providers/gamebanana/gamebanana.provider.js";
-import { sidebar } from "../../sidebar.js";
+import { engineManagerModal } from "../../engine-manager/index.js";
 import { FS } from "../../../../backend/services/filesystem.js";
 import { modModalCarousel } from "./carousel.js";
 import { dependencyReviewModal } from "./dependencyReviewModal.js";
@@ -27,7 +27,7 @@ const modModal = {
     const requestId = ++this.requestId;
     const engineId = gameBananaApi.getEngineIdForSubmission("mods", modId);
     if (engineId) {
-      sidebar.openEngine(engineId);
+      await engineManagerModal.open(engineId);
       return;
     }
     if (!document.getElementById("mod-modal")) {

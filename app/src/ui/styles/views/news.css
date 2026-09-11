@@ -191,7 +191,17 @@
   overflow-x: hidden;
   overflow-y: auto;
   background-color: var(--bg-panel);
-  transition: background-color 360ms ease-out;
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 360ms ease-out;
+}
+
+.news-detail-modal.show .news-detail-modal__content {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .news-detail-modal__media {

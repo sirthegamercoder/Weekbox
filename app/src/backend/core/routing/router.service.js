@@ -100,8 +100,9 @@ router = {
         const shouldAnimate =
           this.currentViewId && this.currentViewId !== viewId;
         if (shouldAnimate) {
+          this.mainContent.classList.remove("app-layout__content--entering");
           this.mainContent.classList.add("app-layout__content--leaving");
-          await new Promise((resolve) => setTimeout(resolve, 140));
+          await new Promise((resolve) => setTimeout(resolve, 180));
           if (navigationId !== this.navigationId) return;
         }
         this.mainContent.replaceChildren(tpl.content.cloneNode(true));
@@ -110,14 +111,12 @@ router = {
         this.mainContent.classList.remove("app-layout__content--leaving");
         if (shouldAnimate) {
           this.mainContent.classList.add("app-layout__content--entering");
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              if (navigationId === this.navigationId)
-                this.mainContent.classList.remove(
-                  "app-layout__content--entering",
-                );
-            }),
-          );
+          setTimeout(() => {
+            if (navigationId === this.navigationId)
+              this.mainContent.classList.remove(
+                "app-layout__content--entering",
+              );
+          }, 320);
         }
         emitViewChange(viewId);
       } else {

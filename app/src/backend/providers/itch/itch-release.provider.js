@@ -39,7 +39,7 @@ function parseUploads(html, source) {
   return platformUploads;
 }
 
-export async function getItchRelease(source) {
+export async function getItchRelease(source, githubRepository = "") {
   const response = await nativeFetch(source.pageUrl, {
     timeout: ITCH_REQUEST_TIMEOUT_MS,
   });
@@ -57,6 +57,7 @@ export async function getItchRelease(source) {
       pageUrl: source.pageUrl,
       platforms: Object.keys(source.platforms),
     },
+    githubRepository,
   };
 }
 

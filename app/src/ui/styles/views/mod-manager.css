@@ -199,9 +199,9 @@
 }
 
 #mod-manager-modal .mod-manager-content {
-  width: min(1080px, 94vw);
-  height: 88vh;
-  max-height: 760px;
+  width: min(1240px, 96vw);
+  height: min(92vh, 860px);
+  max-height: calc(100dvh - 32px);
 }
 
 .mod-manager-overlay.show .mod-manager-content {

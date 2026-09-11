@@ -1,9 +1,4 @@
 import { router } from "../../backend/core/routing/router.service.js";
-import {
-  getSelectedEngine,
-  setSelectedEngine,
-} from "../../backend/core/state/state.service.js";
-import { getEngineReleaseVersions } from "../../backend/providers/github/github-release.provider.js";
 import { modManagerModal } from "./mod-manager/index.js";
 import { engineManagerModal } from "./engine-manager/index.js";
 import { engineUpdateService } from "./engines/engineUpdateService.js";
@@ -11,9 +6,7 @@ import { FS } from "../../backend/services/filesystem.js";
 import { configModal } from "./config/index.js";
 import { networkStatus } from "../../backend/core/system/network-status.service.js";
 import { appEvents } from "../../backend/core/routing/events.service.js";
-import { getEngineLabel, getEngineLabelKey, t } from "./i18n/index.js";
-import { ENGINE_DETAILS } from "../../backend/config/engines.config.js";
-import { getEngineOrder } from "../../backend/config/engine-preferences.js";
+import { t } from "./i18n/index.js";
 import { escapeHtml } from "./mod-manager/modSettingsTemplates.js";
 
 const SIDEBAR_WIDTH_KEY = "weekbox_sidebar_width";
@@ -21,7 +14,6 @@ const SIDEBAR_COLLAPSED_KEY = "weekbox_sidebar_collapsed";
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 500;
 const RESPONSIVE_BREAKPOINT = MAX_SIDEBAR_WIDTH * 1.55;
-const sectionResizerControllers = new WeakMap();
 
 export const sidebar = {
   updateEngineMarquee(button) {
@@ -58,9 +50,6 @@ export const sidebar = {
     this.applySavedWidth();
     this.setupCollapse();
     this.setupCollapsibleSections();
-    this.setupSectionResizer(
-      document.getElementById("standalone-mods-resizer"),
-    );
     this.setupResizer();
     this.setupNavigation();
     this.viewChangeListener = (event) => {
@@ -226,131 +215,6 @@ export const sidebar = {
       );
     });
   },
-  setupSectionResizer(handle) {
-    if (!handle || handle.dataset.sectionResizerReady) return;
-    const before = document.getElementById(handle.dataset.before);
-    const after = document.getElementById(handle.dataset.after);
-    if (!before || !after) return;
-    handle.dataset.sectionResizerReady = "true";
-    const abortController = new AbortController();
-    sectionResizerControllers.set(handle, abortController);
-    const storageKey = `weekbox_sidebar_section_height_${before.id}`;
-    try {
-      const savedHeight = Number(localStorage.getItem(storageKey));
-      if (savedHeight > 0) before.style.flex = `0 0 ${savedHeight}px`;
-    } catch {}
-    const syncAvailability = () => {
-      const disabled = !before.open || !after.open;
-      const availableHeight =
-        before.getBoundingClientRect().height +
-        after.getBoundingClientRect().height;
-      handle.classList.toggle("is-disabled", disabled);
-      handle.setAttribute("aria-disabled", String(disabled));
-      handle.setAttribute(
-        "aria-valuemax",
-        String(Math.max(96, Math.round(availableHeight - 96))),
-      );
-      handle.setAttribute(
-        "aria-valuenow",
-        String(Math.round(before.getBoundingClientRect().height)),
-      );
-    };
-    const applySectionHeight = (height, persist = false) => {
-      const available =
-        before.getBoundingClientRect().height +
-        after.getBoundingClientRect().height;
-      const boundedHeight = Math.min(
-        available - 96,
-        Math.max(96, height),
-      );
-      before.style.flex = `0 0 ${boundedHeight}px`;
-      handle.setAttribute("aria-valuenow", String(Math.round(boundedHeight)));
-      if (persist) {
-        try {
-          localStorage.setItem(storageKey, String(Math.round(boundedHeight)));
-        } catch {}
-      }
-      this.refreshEngineMarquees();
-    };
-    before.addEventListener("toggle", syncAvailability);
-    after.addEventListener("toggle", syncAvailability);
-    syncAvailability();
-    handle.addEventListener("pointerdown", (event) => {
-      if (handle.classList.contains("is-disabled") || event.button !== 0)
-        return;
-      event.preventDefault();
-      this.sectionResize = {
-        after,
-        before,
-        handle,
-        startHeight: before.getBoundingClientRect().height,
-        startY: event.clientY,
-      };
-      handle.classList.add("sidebar__section-resizer--resizing");
-      document.body.style.cursor = "ns-resize";
-      handle.setPointerCapture?.(event.pointerId);
-    });
-    const stopSectionResize = () => {
-      if (!this.sectionResize) return;
-      this.sectionResize.handle.classList.remove(
-        "sidebar__section-resizer--resizing",
-      );
-      if (this.sectionResize.lastHeight != null) {
-        try {
-          localStorage.setItem(
-            storageKey,
-            String(Math.round(this.sectionResize.lastHeight)),
-          );
-        } catch {}
-      }
-      this.sectionResize = null;
-      document.body.style.cursor = "";
-    };
-    document.addEventListener(
-      "pointermove",
-      (event) => {
-        const resize = this.sectionResize;
-        if (!resize) return;
-        const available =
-          resize.before.getBoundingClientRect().height +
-          resize.after.getBoundingClientRect().height;
-        const minHeight = 96;
-        const height = Math.min(
-          available - minHeight,
-          Math.max(
-            minHeight,
-            resize.startHeight + event.clientY - resize.startY,
-          ),
-        );
-        applySectionHeight(height);
-        resize.lastHeight = height;
-      },
-      { signal: abortController.signal },
-    );
-    handle.addEventListener("keydown", (event) => {
-      if (handle.classList.contains("is-disabled")) return;
-      const step = event.shiftKey ? 32 : 8;
-      const current = before.getBoundingClientRect().height;
-      const available =
-        before.getBoundingClientRect().height +
-        after.getBoundingClientRect().height;
-      const maxHeight = Math.max(96, available - 96);
-      let nextHeight;
-      if (event.key === "ArrowUp") nextHeight = current - step;
-      else if (event.key === "ArrowDown") nextHeight = current + step;
-      else if (event.key === "Home") nextHeight = 96;
-      else if (event.key === "End") nextHeight = maxHeight;
-      else return;
-      event.preventDefault();
-      applySectionHeight(nextHeight, true);
-    });
-    document.addEventListener("pointerup", stopSectionResize, {
-      signal: abortController.signal,
-    });
-    document.addEventListener("pointercancel", stopSectionResize, {
-      signal: abortController.signal,
-    });
-  },
   setActive(button) {
     const buttons = [
       ...this.tabButtons,
@@ -365,17 +229,6 @@ export const sidebar = {
     });
   },
   syncActive(viewId = router.currentViewId) {
-    if (viewId === "engines") {
-      const selected = getSelectedEngine();
-      const button = [
-        ...document.querySelectorAll(".sidebar__engine-btn"),
-      ].find(
-        (candidate) =>
-          candidate.dataset.engineId === String(selected?.id || ""),
-      );
-      if (button) this.setActive(button);
-      return;
-    }
     if (viewId !== "home" && viewId !== "news") return;
     const button = [...this.tabButtons].find(
       (candidate) => candidate.dataset.tab === viewId,
@@ -426,12 +279,6 @@ export const sidebar = {
     });
   },
   async refreshNetworkFeatures() {
-    const enginesContainer = document.getElementById("engines-container");
-    enginesContainer?.classList.toggle("is-offline", !networkStatus.online);
-    enginesContainer?.setAttribute(
-      "aria-disabled",
-      String(!networkStatus.online),
-    );
     const networkIndicator = document.getElementById("sidebar-network-status");
     networkIndicator?.classList.toggle("is-online", networkStatus.online);
     networkIndicator?.classList.toggle("is-offline", !networkStatus.online);
@@ -443,166 +290,17 @@ export const sidebar = {
       "title",
       networkStatus.online ? t("network.online") : t("network.offline"),
     );
-    await this.loadEngines().catch((e) =>
-      console.warn("Could not load engines", e),
-    );
     void this.loadStandaloneMods().catch((e) =>
       console.warn("Could not load standalone mods", e),
     );
     if (networkStatus.online) engineUpdateService.startScheduledChecks();
-    if (!networkStatus.online && router.currentViewId === "engines") {
-      await router.navigate("home");
-    }
-  },
-  openEngine(engineId) {
-    const button = document.querySelector(
-      `.sidebar__engine-btn[data-engine-id="${engineId}"]`,
-    );
-    if (!button) return false;
-    button.click();
-    return true;
-  },
-  applyEngineOrder() {
-    const wrapper = document.getElementById("engines-wrapper");
-    if (!wrapper) return;
-    const buttons = new Map(
-      [...wrapper.querySelectorAll(".sidebar__engine-btn")].map((button) => [
-        button.dataset.engineId,
-        button,
-      ]),
-    );
-    for (const engineId of getEngineOrder(buttons.keys())) {
-      const button = buttons.get(engineId);
-      if (button) wrapper.appendChild(button);
-    }
-  },
-  extractVersionFromUrl(url) {
-    if (!url) return "Unknown";
-    const githubMatch = url.match(/\/download\/(v?([^\/]+))\//);
-    if (githubMatch && githubMatch[2]) return githubMatch[2];
-    const genericMatch = url.match(/(?:v|-)?(\d+\.\d+(?:\.\d+)?)/i);
-    if (genericMatch && genericMatch[1]) return genericMatch[1];
-    return "Unknown";
-  },
-  async loadEngines() {
-    const wrapper = document.getElementById("engines-wrapper");
-    if (!wrapper) return;
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch("src/backend/data/engines-router.json", {
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
-      if (!response.ok) throw new Error("Failed to load engines-router.json");
-      const enginesRouter = await response.json();
-      wrapper.innerHTML = "";
-      const engineDefsById = new Map(
-        enginesRouter.map((engineDef) => [engineDef.versions, engineDef]),
-      );
-      for (const engineId of getEngineOrder(engineDefsById.keys())) {
-        const engineDef = engineDefsById.get(engineId);
-        if (!engineDef) continue;
-        const details = ENGINE_DETAILS[engineDef.versions] || {};
-        const displayName = getEngineLabel(
-          engineDef.versions,
-          details.name || engineDef.versions,
-        );
-        const labelKey = getEngineLabelKey(engineDef.versions);
-        const iconSrc = details.icon ? `assets/icons/${details.icon}` : "";
-        const btn = document.createElement("button");
-        btn.className = "sidebar__btn sidebar__engine-btn";
-        btn.dataset.engineId = engineDef.versions;
-        btn.disabled = !networkStatus.online;
-        btn.title = networkStatus.online
-          ? ""
-          : t("network.connectToBrowseEngines");
-        btn.innerHTML = `
-          <img src="${iconSrc}" class="sidebar__engine-icon" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 512 512\\'><path fill=\\'%23888\\' d=\\'M448 32H64C28.65 32 0 60.65 0 96v320c0 35.35 28.65 64 64 64h384c35.35 0 64-28.65 64-64V96C512 60.65 483.3 32 448 32zM212.7 222.7L132.7 302.7C126.4 308.9 118.2 312 110.1 312s-16.38-3.125-22.62-9.375c-12.5-12.5-12.5-32.75 0-45.25L155.3 189.3l-67.88-67.88c-12.5-12.5-12.5-32.75 0-45.25s32.75-12.5 45.25 0l102.6 102.6C247.7 191.3 247.7 210.2 212.7 222.7zM384 320c-17.67 0-32-14.33-32-32s14.33-32 32-32h32c17.67 0 32 14.33 32 32s-14.33 32-32 32H384z\\'/></svg>'">
-          <div class="sidebar__marquee-container"><span class="sidebar__marquee-text"${labelKey ? ` data-i18n="${labelKey}"` : ""}>${displayName}</span></div>
-        `;
-        btn.addEventListener("click", async () => {
-          this.setActive(btn);
-          try {
-            const label = btn.querySelector(".sidebar__marquee-text");
-            const container = btn.querySelector(".sidebar__marquee-container");
-            const originalText = label.textContent;
-            container.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i> ${t("common.loading")}`;
-            const releaseVersions = await getEngineReleaseVersions(
-              engineDef.versions,
-            );
-            if (releaseVersions.length === 0)
-              throw new Error(t("network.noCompatibleReleases"));
-            const processedVersionsData = releaseVersions.map((item) => {
-              const sampleLink =
-                item.win ||
-                item.win64 ||
-                item.win32 ||
-                item.lin ||
-                item.mac ||
-                item.mac64 ||
-                item.macarm ||
-                "";
-              return {
-                ...item,
-                version: item.version || this.extractVersionFromUrl(sampleLink),
-              };
-            });
-            processedVersionsData.sort((a, b) => {
-              if (a.isNightly) return -1;
-              if (b.isNightly) return 1;
-              return b.version.localeCompare(a.version, undefined, {
-                numeric: true,
-                sensitivity: "base",
-              });
-            });
-            container.innerHTML = `<span class="sidebar__marquee-text">${originalText}</span>`;
-            setSelectedEngine({
-              id: engineDef.versions,
-              meta: { name: displayName, icon: details.icon },
-              versions: processedVersionsData,
-            });
-            router.navigate("engines");
-          } catch (err) {
-            console.error(err);
-            btn.querySelector(".sidebar__marquee-container").innerHTML =
-              `<span class="sidebar__marquee-text">${displayName}</span>`;
-            this.updateEngineMarquee(btn);
-            setTimeout(
-              () =>
-                alert(t("network.loadVersionFailed", { name: displayName })),
-              0,
-            );
-          }
-        });
-        wrapper.appendChild(btn);
-        this.updateEngineMarquee(btn);
-        this.updateCollapsedTooltips();
-      }
-    } catch (error) {
-      console.error(error);
-      wrapper.innerHTML = `<p style="color:red; padding:8px; font-size:12px;">${t("network.engineRouterFailed")}</p>`;
-    }
   },
   async loadStandaloneMods() {
     const container = document.getElementById("standalone-mods-container");
     const wrapper = document.getElementById("standalone-mods-wrapper");
-    const resizer = document.getElementById("standalone-mods-resizer");
-    const enginesContainer = document.getElementById("engines-container");
     if (!container || !wrapper) return;
-    const clearSavedEngineHeight = () => {
-      enginesContainer?.style.removeProperty("flex");
-      try {
-        if (enginesContainer) {
-          localStorage.removeItem(
-            `weekbox_sidebar_section_height_${enginesContainer.id}`,
-          );
-        }
-      } catch {}
-    };
     if (!FS.isInitialized) {
       container.style.display = "none";
-      if (resizer) resizer.style.display = "none";
-      clearSavedEngineHeight();
       return;
     }
 
@@ -612,15 +310,11 @@ export const sidebar = {
 
     if (standaloneMods.length === 0) {
       container.style.display = "none";
-      if (resizer) resizer.style.display = "none";
-      clearSavedEngineHeight();
       return;
     }
 
     container.style.display = "";
-    if (resizer) resizer.style.display = "";
     this.setupCollapsibleSections(container);
-    if (resizer) this.setupSectionResizer(resizer);
 
     for (const mod of standaloneMods) {
       const btn = document.createElement("button");
