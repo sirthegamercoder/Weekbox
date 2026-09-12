@@ -683,6 +683,9 @@ var _FileSystemService = class _FileSystemService {
       await runPhase("Scanning engine versions\u2026", 97, async () => {
         installedEngines = await this.getInstalledEngines();
       });
+      await runPhase("Updating custom engine icons\u2026", 97, () =>
+        this.refreshCustomEngineIcons(installedEngines),
+      );
       await runPhase("Updating engine mod folders\u2026", 98, async () => {
         await this.injection.migrateLegacyEngineModsFor(installedEngines);
       });
@@ -1479,14 +1482,26 @@ var _FileSystemService = class _FileSystemService {
     const normalizedVersion = sanitizePathSegment(version) || "Local";
     const resolvedId = engineId || `custom-${crypto.randomUUID()}`;
     const existingEngine = this.customEngines.get(resolvedId);
+    const executablePath = `${source}/${String(
+      executable || details.executable || "",
+    )
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")}`;
+    const detectedIcon =
+      !existingEngine ||
+      !existingEngine.icon ||
+      existingEngine.icon === "exe.png"
+        ? await this.executables.getIconDataUrl(executablePath)
+        : "";
     const engine = existingEngine || {
       id: resolvedId,
       name: normalizedName,
-      icon: "exe.png",
+      icon: detectedIcon || "exe.png",
       createdAt: new Date().toISOString(),
       versions: [],
     };
     if (!existingEngine) engine.name = normalizedName || engine.name;
+    if (existingEngine && detectedIcon) engine.icon = detectedIcon;
     const existing = engine.versions.find(
       (candidate) => candidate.version === normalizedVersion,
     );
@@ -1791,6 +1806,29 @@ var _FileSystemService = class _FileSystemService {
     } catch (error) {
       return [];
     }
+  }
+  async refreshCustomEngineIcons(installedEngines = []) {
+    let changed = false;
+    for (const engine of this.customEngines.getAll()) {
+      if (engine.icon && engine.icon !== "exe.png") continue;
+      const install = installedEngines.find(
+        (item) => item.custom && item.id === engine.id,
+      );
+      const version = engine.versions.find(
+        (item) => item.version === install?.version,
+      );
+      const executable = version?.executable
+        ? `${install?.path}/${version.executable}`
+        : install?.path
+          ? await this.findExecutable(install.path)
+          : "";
+      if (!executable) continue;
+      const icon = await this.executables.getIconDataUrl(executable);
+      if (!icon) continue;
+      engine.icon = icon;
+      changed = true;
+    }
+    if (changed) await this.customEngines.save();
   }
   async injectModIntoEngine(modId, engineId, version) {
     return this.injection.injectOne(modId, engineId, version);

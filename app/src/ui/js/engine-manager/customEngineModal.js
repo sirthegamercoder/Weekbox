@@ -314,7 +314,7 @@ export const customEngineModal = {
                     )
                     .join("")}</select></label>`
             }
-            <label><span>${t("engineManager.customEngineName")}</span><input class="engine-custom-name" maxlength="80" value="${escapeHtml(defaultName)}" ${this.existingEngineId ? "disabled" : "required"}></label>
+            <label class="engine-custom-name-field" ${this.existingEngineId ? "hidden" : ""}><span>${t("engineManager.customEngineName")}</span><input class="engine-custom-name" maxlength="80" value="${escapeHtml(defaultName)}" required></label>
             <label><span>${t("engineManager.customEngineVersion")}</span><input class="engine-custom-version" maxlength="80" value="${escapeHtml(this.metadata.version)}" required></label>
             <label><span>${t("engineManager.customExecutable")}</span><select class="engine-custom-executable">${(this.metadata.executables || [this.metadata.executable]).map((path) => `<option value="${escapeHtml(path)}" ${path === this.metadata.executable ? "selected" : ""}>${escapeHtml(path)}</option>`).join("")}</select></label>
           </div>
@@ -343,16 +343,18 @@ export const customEngineModal = {
     });
     const family = form.querySelector(".engine-custom-family");
     const nameInput = form.querySelector(".engine-custom-name");
+    const nameField = form.querySelector(".engine-custom-name-field");
     const syncFamilyFields = () => {
       if (!family || !nameInput) return;
       const selected = family.value;
-      const wasLocked = nameInput.disabled;
+      const wasHidden = nameField?.hidden;
+      nameField.hidden = Boolean(selected);
       nameInput.disabled = Boolean(selected);
       nameInput.required = !selected;
       if (selected) {
         nameInput.value =
           FS.getEngineDetails(selected)?.name || nameInput.value;
-      } else if (wasLocked) {
+      } else if (wasHidden) {
         nameInput.value = this.metadata.name;
       }
     };
@@ -368,7 +370,12 @@ export const customEngineModal = {
 
   async import(form) {
     const submit = form.querySelector(".engine-custom-submit");
-    const name = form.querySelector(".engine-custom-name")?.value.trim();
+    const selectedFamily = form.querySelector(".engine-custom-family")?.value;
+    const name =
+      form.querySelector(".engine-custom-name")?.value.trim() ||
+      FS.getEngineDetails(
+        this.existingEngineId || selectedFamily,
+      )?.name?.trim();
     const version = form.querySelector(".engine-custom-version")?.value.trim();
     const executable = form.querySelector(".engine-custom-executable")?.value;
     if (!name || !version || !executable) return;

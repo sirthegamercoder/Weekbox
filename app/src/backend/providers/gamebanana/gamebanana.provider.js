@@ -30,6 +30,7 @@ import { nativeFetch } from "../../services/network/native-http.js";
 import {
   ENGINE_CATEGORY_IDS,
   ENGINE_CATEGORY_ROOTS,
+  CATEGORY_ROOTS,
   EXCLUDED_MOD_CATEGORY_IDS,
   MOD_KIND_CATEGORY_IDS,
 } from "../../config/engines.config.js";
@@ -213,6 +214,21 @@ function getModClassification(api, data) {
   };
 }
 
+const OTHER_MISC_CATEGORY_ID = 43773;
+const OTHER_MISC_ENGINE_CATEGORY_IDS = [43850, 43798];
+
+function isOtherMiscEngineMod(api, mod) {
+  return OTHER_MISC_ENGINE_CATEGORY_IDS.some((categoryId) =>
+    api.isInCategory(
+      categoryId,
+      mod._aCategory,
+      mod._aSuperCategory,
+      mod._aRootCategory,
+      mod._aSubCategory,
+    ),
+  );
+}
+
 function buildModDetails(
   api,
   data,
@@ -242,16 +258,26 @@ function buildModDetails(
 
 function appendRipeMods(api, feed, records, targetCategoryId) {
   for (const mod of records) {
-    if (
-      mod?._sModelName !== "Mod" ||
-      api.isDeletedMod(mod) ||
-      api.isExcludedEngineSubmission(mod) ||
-      api.isExcludedCategory(
+    const inTargetCategory =
+      targetCategoryId &&
+      api.isInCategory(
+        targetCategoryId,
         mod._aCategory,
         mod._aSuperCategory,
         mod._aRootCategory,
         mod._aSubCategory,
-      )
+      );
+    if (
+      mod?._sModelName !== "Mod" ||
+      api.isDeletedMod(mod) ||
+      api.isExcludedEngineSubmission(mod) ||
+      (api.isExcludedCategory(
+        mod._aCategory,
+        mod._aSuperCategory,
+        mod._aRootCategory,
+        mod._aSubCategory,
+      ) &&
+        !inTargetCategory)
     )
       continue;
 
@@ -263,15 +289,10 @@ function appendRipeMods(api, feed, records, targetCategoryId) {
       mod._idCategory,
     );
     if (
-      !engineId ||
-      (targetCategoryId &&
-        !api.isInCategory(
-          targetCategoryId,
-          mod._aCategory,
-          mod._aSuperCategory,
-          mod._aRootCategory,
-          mod._aSubCategory,
-        ))
+      (Number(targetCategoryId) === OTHER_MISC_CATEGORY_ID &&
+        isOtherMiscEngineMod(api, mod)) ||
+      (!engineId && !inTargetCategory) ||
+      (targetCategoryId && !inTargetCategory)
     )
       continue;
     if (feed.modIds.has(mod._idRow)) continue;
@@ -322,7 +343,7 @@ export const gameBananaApi = {
   baseUrl: "https://gamebanana.com/apiv11",
   subfeedBaseUrl: "https://gamebanana.com/apiv12",
   gameId: 8694,
-  categoryRoots: ENGINE_CATEGORY_ROOTS,
+  categoryRoots: CATEGORY_ROOTS,
   excludedCategoryIds: new Set(EXCLUDED_MOD_CATEGORY_IDS),
   engineCategories: ENGINE_CATEGORY_IDS,
   modKindCategories: MOD_KIND_CATEGORY_IDS,
@@ -986,9 +1007,13 @@ export const gameBananaApi = {
         transport: this.categoryTransport,
         gameId: this.gameId,
         categoryRoots: this.categoryRoots,
+        defaultCategoryRoots: ENGINE_CATEGORY_ROOTS,
         getRecords: this.getValidRecords.bind(this),
         toGridMod: this.toGridMod.bind(this),
-        isExcluded: this.isExcludedEngineSubmission.bind(this),
+        isExcluded: (mod, categoryId) =>
+          this.isExcludedEngineSubmission(mod) ||
+          (Number(categoryId) === OTHER_MISC_CATEGORY_ID &&
+            isOtherMiscEngineMod(this, mod)),
         getEngineId: (mod, categoryId) =>
           this.getEngineIdForCategories(
             categoryId,

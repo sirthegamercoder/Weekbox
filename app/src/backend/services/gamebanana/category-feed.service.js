@@ -15,6 +15,7 @@ export class CategoryFeedService {
     transport,
     gameId,
     categoryRoots,
+    defaultCategoryRoots = categoryRoots,
     getRecords,
     toGridMod,
     isExcluded,
@@ -24,6 +25,7 @@ export class CategoryFeedService {
     this.transport = transport;
     this.gameId = gameId;
     this.categoryRoots = categoryRoots;
+    this.defaultCategoryRoots = defaultCategoryRoots;
     this.getRecords = getRecords;
     this.toGridMod = toGridMod;
     this.isExcluded = isExcluded || (() => false);
@@ -48,7 +50,7 @@ export class CategoryFeedService {
   getCategories(categoryId) {
     return this.categoryRoots.includes(categoryId)
       ? [categoryId]
-      : this.categoryRoots;
+      : this.defaultCategoryRoots;
   }
 
   getSortValue(mod, sort) {
@@ -87,7 +89,7 @@ export class CategoryFeedService {
       throw new Error("GameBanana category requests failed");
     }
     return [...new Map(records.map((mod) => [mod._idRow, mod])).values()]
-      .filter((mod) => !this.isExcluded(mod))
+      .filter((mod) => !this.isExcluded(mod, mod.__injectedCategoryId))
       .sort(
         (left, right) =>
           this.getSortValue(right, sort) - this.getSortValue(left, sort),
@@ -186,12 +188,14 @@ export class CategoryFeedService {
           new: "Generic_Newest",
           updated: "Generic_LatestUpdated",
         }[filter] || "Generic_Newest";
-      return (await this.getCategoryRecords({
-        page,
-        perPage: pageSize,
-        sort,
-        categoryId,
-      }))
+      return (
+        await this.getCategoryRecords({
+          page,
+          perPage: pageSize,
+          sort,
+          categoryId,
+        })
+      )
         .slice(0, pageSize)
         .map(this.toGridMod);
     } catch (error) {

@@ -30,6 +30,41 @@ function isExcludedExecutable(fileName) {
   );
 }
 
+function encodePowerShellCommand(command) {
+  const bytes = new Uint8Array(command.length * 2);
+  for (let index = 0; index < command.length; index += 1) {
+    const code = command.charCodeAt(index);
+    bytes[index * 2] = code & 0xff;
+    bytes[index * 2 + 1] = code >> 8;
+  }
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return window.btoa(binary);
+}
+
+function quotePowerShellString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+async function getEmbeddedIconDataUrl(executablePath) {
+  if (window.NL_OS !== "Windows") return "";
+  try {
+    const command = encodePowerShellCommand(
+      `Add-Type -AssemblyName System.Drawing;$icon=[System.Drawing.Icon]::ExtractAssociatedIcon(${quotePowerShellString(executablePath)});if($icon){$bitmap=$icon.ToBitmap();$stream=[System.IO.MemoryStream]::new();$bitmap.Save($stream,[System.Drawing.Imaging.ImageFormat]::Png);[Convert]::ToBase64String($stream.ToArray());$bitmap.Dispose();$stream.Dispose();$icon.Dispose()}`,
+    );
+    const result = await Neutralino.os.execCommand(
+      `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${command}`,
+      { background: false },
+    );
+    const embedded = String(result.stdOut || "").trim();
+    return result.exitCode === 0 && embedded
+      ? `data:image/png;base64,${embedded}`
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 async function findMacBundleExecutable(service, fullPath) {
   const macOSDirectory = `${fullPath}/Contents/MacOS`;
   try {
@@ -206,12 +241,26 @@ var _ExecutableService = class _ExecutableService {
         ".png": "image/png",
         ".svg": "image/svg+xml",
       };
-      const icon = entries.find((entry) => {
+      const files = entries.filter((entry) => {
         const extension = entry.entry
           .slice(entry.entry.lastIndexOf("."))
           .toLowerCase();
         return entry.type === "FILE" && extension in iconMimeTypes;
       });
+      const executableName = executablePath
+        .split(/[\\/]/)
+        .at(-1)
+        ?.replace(/\.[^.]+$/, "")
+        .toLowerCase();
+      const sidecarIcon =
+        files.find(
+          (entry) => entry.entry.toLowerCase() === `${executableName}.ico`,
+        ) || files.find((entry) => entry.entry.toLowerCase().endsWith(".ico"));
+      if (!sidecarIcon) {
+        const embedded = await getEmbeddedIconDataUrl(executablePath);
+        if (embedded) return embedded;
+      }
+      const icon = sidecarIcon || files[0];
       if (!icon) return "";
       const data = await Neutralino.filesystem.readBinaryFile(
         `${executableDir}/${icon.entry}`,
@@ -222,7 +271,8 @@ var _ExecutableService = class _ExecutableService {
       const extension = icon.entry
         .slice(icon.entry.lastIndexOf("."))
         .toLowerCase();
-      return `data:${iconMimeTypes[extension]};base64,${window.btoa(binary)}`;
+      const sidecar = `data:${iconMimeTypes[extension]};base64,${window.btoa(binary)}`;
+      return sidecar;
     } catch (error) {
       return "";
     }

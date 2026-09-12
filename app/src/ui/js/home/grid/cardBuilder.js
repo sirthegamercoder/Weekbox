@@ -48,11 +48,7 @@ export function createCard(mod, index) {
   const engine = FS.getEngineDetails(mod.engineId);
   const engineIndicator = document.createElement("span");
   engineIndicator.className = "grid-engine-indicator";
-  const labelKey = engine
-    ? engineLabelKeys[mod.engineId]
-    : mod.gameId === 8694
-      ? "home.baseGame"
-      : "import.unassigned";
+  const labelKey = engine ? engineLabelKeys[mod.engineId] : "home.noEngine";
   const engineName = labelKey ? t(labelKey) : engine?.name || "";
   engineIndicator.dataset.labelKey = labelKey || "";
   engineIndicator.dataset.label = engineName;
@@ -64,11 +60,6 @@ export function createCard(mod, index) {
     engineIcon.src = FS.getEngineIconSource(mod.engineId);
     engineIcon.alt = "";
     engineIndicator.appendChild(engineIcon);
-  } else if (mod.gameId === 8694) {
-    const fnfIcon = document.createElement("img");
-    fnfIcon.src = "assets/icons/vslice.png";
-    fnfIcon.alt = "";
-    engineIndicator.appendChild(fnfIcon);
   } else {
     const defaultIcon = document.createElement("i");
     defaultIcon.className = "fa-solid fa-question-circle";
