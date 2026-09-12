@@ -1,4 +1,5 @@
 import { getTargetPlatform } from "./utils.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { i18n, t } from "../i18n/index.js";
 import {
   activateCheckoutDialog,
@@ -81,7 +82,7 @@ export const engineUpdateModal = {
 
     overlay.querySelector("#engine-update-title").textContent = name;
     const iconElement = overlay.querySelector(".engine-update-mark");
-    iconElement.src = icon ? `assets/icons/${icon}` : "";
+    iconElement.src = icon ? FS.getEngineIconSource(engineId) : "";
     iconElement.hidden = !icon;
     overlay.querySelector(".engine-update-build").textContent = buildLabel;
 

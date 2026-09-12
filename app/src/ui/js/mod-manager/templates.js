@@ -14,6 +14,13 @@ function escapeHtml(value) {
   );
 }
 
+function getIconSource(icon) {
+  const source = String(icon || "exe.png");
+  return /^(?:data|blob|https?):/i.test(source)
+    ? source
+    : `assets/icons/${source}`;
+}
+
 function renderTemplate(id, data = {}, rawKeys = []) {
   const tpl = document.getElementById(id);
   if (!tpl) return "";
@@ -30,7 +37,7 @@ const modManagerTemplates = {
   unassignedBadge: () => renderTemplate("tpl-unassignedBadge"),
   executableBadge: () => renderTemplate("tpl-executableBadge"),
   engineBadge: (name, icon) =>
-    renderTemplate("tpl-engineBadge", { name, icon }),
+    renderTemplate("tpl-engineBadge", { name, icon: getIconSource(icon) }),
   engineCompatibilityPicker: (
     modId,
     engineId,
@@ -48,7 +55,7 @@ const modManagerTemplates = {
         engineId,
         engineVersion,
         selectedEngineIconHtml: selectedEngineIcon
-          ? `<img src="assets/icons/${selectedEngineIcon}" alt=""/>`
+          ? `<img src="${escapeHtml(getIconSource(selectedEngineIcon))}" alt=""/>`
           : `<i class="fa-solid fa-question-circle" aria-hidden="true"></i>`,
         selectedEngineName,
         unassignedSelectedClass: !engineId ? "selected" : "",
@@ -63,7 +70,7 @@ const modManagerTemplates = {
     renderTemplate("tpl-engineOption", {
       id,
       name,
-      icon,
+      icon: getIconSource(icon),
       selectedClass: isSelected ? "selected" : "",
     }),
   versionOption: (version, isSelected) =>

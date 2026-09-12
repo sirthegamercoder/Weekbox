@@ -1,4 +1,4 @@
-import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { t } from "../i18n/index.js";
 
 export function escapeHtml(value) {
@@ -94,12 +94,15 @@ function renderSettingsFooter({
   readOnly,
   resetTitle,
   isDependency,
+  isExecutable,
+  fileLocked,
 }) {
   const resetDisabled =
     canReset && !readOnly
       ? ""
       : `disabled title="${escapeHtml(readOnly ? t("modSettings.closeEngineToChangeShort") : resetTitle)}"`;
   return `<footer class="mod-settings-footer">
+        ${isExecutable ? `<button type="button" class="mod-settings-convert-engine" ${readOnly || fileLocked ? "disabled" : ""}>${t("engineManager.convertExecutable")}</button>` : ""}
         <button type="button" class="mod-settings-reset" ${resetDisabled}>${t("common.reset")}</button>
         ${isDependency ? `<button type="button" class="mod-settings-move-to-mods" ${readOnly ? "disabled" : ""}>${t("modSettings.moveToMods")}</button>` : ""}
         <span class="mod-settings-status" role="status"></span>
@@ -124,7 +127,7 @@ export function settingsContent({
     !isExecutable &&
     mod.engineId &&
     mod.engineId !== "executable" &&
-    ENGINE_DETAILS[mod.engineId],
+    FS.getEngineDetails(mod.engineId),
   );
   const tagsField = renderTagsField(readOnly, tagSuggestions);
   return `
@@ -155,6 +158,6 @@ export function settingsContent({
         ${!isExecutable && mod.engineLocked ? `<p class="mod-settings-note">${t("modSettings.lockedToPsychOnline")}</p>` : ""}
         ${readOnly ? `<p class="mod-settings-note">${t("modSettings.closeEngineToChange")}</p>` : ""}
       </div>
-      ${renderSettingsFooter({ canReset, readOnly, resetTitle, isDependency })}
+      ${renderSettingsFooter({ canReset, readOnly, resetTitle, isDependency, isExecutable, fileLocked })}
     </form>`;
 }

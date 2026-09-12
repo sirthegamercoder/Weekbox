@@ -5,7 +5,66 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.3.1] - 2026-09-11
+
+### Added
+
+- Added an in-app What's New window for new WeekBox releases.
+- Release notes now use the matching section from the Markdown changelog.
+
+### Changed
+
+- Custom engine imports now add configured mods automatically.
+- Existing custom-engine mods are matched instead of duplicated.
+- The engine picker hides custom families with no installed versions.
+- Removing a custom engine family now removes all of its versions together.
+- Removed the old manual engine-mod import action.
+
+### Fixed
+
+- Re-importing a deleted custom-engine version works again.
+- Empty custom engine families and missing versions are cleaned up on startup.
+- Leftover multipart engine and mod downloads are cleaned up on startup.
+- Windows no longer treats extensionless mod files as executables.
+
+## [2.3.0] - 2026-09-11
+
+### Added
+
+- Import engine folders as custom engine families.
+- Add imported versions to existing engine families.
+- Convert executable mods into custom engine installs.
+- Choose Mods or Addons folders during engine import.
+- Rename installed versions while keeping their original version.
+- Download engines in the background with a progress toast.
+- Browse GameBanana's Legacy Categories and Other/Misc Mod Folders.
+- Install the same mod more than once.
+- Pick custom engine icons from nearby `.ico` or image files.
+
+### Changed
+
+- Softened page, card, engine, modal, and sidebar transitions.
+- Built-in and custom engines now use the same manager and version picker.
+- Engine downloads now stage a replacement before changing the installed copy.
+- Legacy category warnings appear only when that category is selected.
+- Other/Misc Mod Folders leaves out P-Slice and FPS+ content.
+- Mods without a known engine now use a neutral missing-engine label.
+- Startup and modal screens use softer fades and transitions.
+- Finished the German locale entries.
+
+### Fixed
+
+- Failed engine redownloads no longer damage the installed version.
+- The engine download button now changes to Cancel while downloading.
+- Custom engine mods now go into their configured content folders.
+- Custom engine icons now show in the manager and download toast.
+- Engine names stay saved after restarting WeekBox.
+- Closing WeekBox on Windows now hides it in the tray; Quit still exits it.
+
+### Removed
+
+- Removed duplicate inline engine download progress text.
+- Removed the extra custom-engine content-folder hint.
 
 ## [2.2.0] - 2026-09-10
 
@@ -985,7 +1044,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Downloads for Windows, Linux, and macOS.
 - Packages for x64, ARM64, ARMHF, and Universal Macs where available.
 
-[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.2.0...HEAD
+[unreleased]: https://github.com/Crew-Awesome/Weekbox/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/Crew-Awesome/Weekbox/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/Crew-Awesome/Weekbox/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.18...v2.2.0
 [2.1.18]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.17...v2.1.18
 [2.1.17]: https://github.com/Crew-Awesome/Weekbox/compare/v2.1.16...v2.1.17

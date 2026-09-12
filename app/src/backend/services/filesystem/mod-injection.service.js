@@ -15,8 +15,9 @@ function supportsEngineVersion(mod, version) {
 function usesAddonsDirectory(mod, engineId) {
   // Legacy Codename dependencies already live in addons; keep that placement on migration.
   return (
-    engineId === "codename" &&
-    (mod.kind === "dependency" || mod.kind === "addon")
+    (engineId === "codename" &&
+      (mod.kind === "dependency" || mod.kind === "addon")) ||
+    (String(engineId).startsWith("custom-") && mod.kind === "addon")
   );
 }
 
@@ -120,6 +121,7 @@ var _ModInjectionService = class _ModInjectionService {
     getEnginesPath,
     getModsPath,
     isEngineRunning,
+    getCustomEngine,
   }) {
     this.api = api;
     this.executables = executables;
@@ -127,6 +129,7 @@ var _ModInjectionService = class _ModInjectionService {
     this.getEnginesPath = getEnginesPath;
     this.getModsPath = getModsPath;
     this.isEngineRunning = isEngineRunning;
+    this.getCustomEngine = getCustomEngine;
   }
   getLegacyModsPath(engineId, version) {
     return `${this.getEnginesPath()}/${engineId}/${version}/mods`;
@@ -135,10 +138,30 @@ var _ModInjectionService = class _ModInjectionService {
     return `${this.getEnginesPath()}/${engineId}/${version}/addons`;
   }
   async getEngineContentPath(engineId, version, directoryName) {
-    const legacyPath = `${this.getEnginesPath()}/${engineId}/${version}/${directoryName}`;
+    const customEngine = this.getCustomEngine?.(engineId);
+    const customVersion = customEngine?.versions?.find(
+      (candidate) => candidate.version === version,
+    );
+    const customDirectory = customVersion?.modDirectories?.find(
+      (directory) =>
+        directory.enabled !== false &&
+        (directory.type ===
+          (directoryName === "mods"
+            ? "mod"
+            : directoryName === "addons"
+              ? "addon"
+              : directoryName === "dependencies"
+                ? "dependency"
+                : directoryName) ||
+          String(directory.path || "").toLocaleLowerCase() === directoryName),
+    );
+    const customInstallPath = customVersion
+      ? `${this.getEnginesPath()}/${engineId}/${customVersion.installId}`
+      : null;
+    const legacyPath = `${customInstallPath || `${this.getEnginesPath()}/${engineId}/${version}`}/${customDirectory?.path || directoryName}`;
     if (window.NL_OS !== "Darwin") return legacyPath;
     const executablePath = await this.executables.find(
-      `${this.getEnginesPath()}/${engineId}/${version}`,
+      customInstallPath || `${this.getEnginesPath()}/${engineId}/${version}`,
     );
     const normalizedPath = String(executablePath || "").replace(/\\/g, "/");
     const bundleMatch = normalizedPath.match(/^(.+?\.app)(?:\/|$)/i);
@@ -197,7 +220,9 @@ var _ModInjectionService = class _ModInjectionService {
     await this.migrateLegacyEngineMods(engineId, version);
     const modsPath = usesAddonsDirectory(mod, engineId)
       ? await this.getEngineAddonsPath(engineId, version)
-      : await this.getEngineModsPath(engineId, version);
+      : mod.kind === "dependency"
+        ? await this.getEngineContentPath(engineId, version, "dependencies")
+        : await this.getEngineModsPath(engineId, version);
     const engineFolderName = getEngineModFolderName(mod);
     if (!String(modsPath || "").trim())
       throw new Error(
@@ -305,6 +330,11 @@ var _ModInjectionService = class _ModInjectionService {
         this.getLegacyAddonsPath(engineId, version),
       );
     }
+    if (this.getCustomEngine?.(engineId)) {
+      enginePaths.push(
+        await this.getEngineContentPath(engineId, version, "dependencies"),
+      );
+    }
     const paths = [...new Set(enginePaths)].map(
       (modsPath) => `${modsPath}/${getEngineModFolderName(mod)}`,
     );
@@ -344,6 +374,11 @@ var _ModInjectionService = class _ModInjectionService {
       enginePaths.push(
         await this.getEngineAddonsPath(engineId, version),
         this.getLegacyAddonsPath(engineId, version),
+      );
+    }
+    if (this.getCustomEngine?.(engineId)) {
+      enginePaths.push(
+        await this.getEngineContentPath(engineId, version, "dependencies"),
       );
     }
     for (const modsPath of new Set(enginePaths)) {

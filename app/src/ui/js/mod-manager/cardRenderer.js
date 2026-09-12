@@ -1,9 +1,6 @@
 import { FS } from "../../../backend/services/filesystem.js";
 import { gameBananaApi } from "../../../backend/providers/gamebanana/gamebanana.provider.js";
-import {
-  ENGINE_DETAILS,
-  getEngineLaunchBehavior,
-} from "../../../backend/config/engines.config.js";
+import { getEngineLaunchBehavior } from "../../../backend/config/engines.config.js";
 import { applyDominantColor } from "../../utils/media/extract-color.util.js";
 import { engineUpdateToast } from "../engines/engineUpdateToast.js";
 import { modManagerTemplates } from "./templates.js";
@@ -31,7 +28,7 @@ function getCardEngineContext(mod, standaloneModIds, installedEngines) {
     !isExecutable &&
     mod.engineId &&
     mod.engineId !== "executable" &&
-    ENGINE_DETAILS[mod.engineId],
+    FS.getEngineDetails(mod.engineId),
   );
   const engine = hasEngine
     ? (() => {
@@ -49,7 +46,7 @@ function getCardEngineContext(mod, standaloneModIds, installedEngines) {
   let engineBadgeHtml = modManagerTemplates.unassignedBadge();
   if (!isExecutable && (mod.engineLocked || hasEngine)) {
     const engineId = mod.engineLocked ? "psychonline" : mod.engineId;
-    const engineInfo = ENGINE_DETAILS[engineId];
+    const engineInfo = FS.getEngineDetails(engineId);
     engineBadgeHtml = modManagerTemplates.engineBadge(
       formatVersionLabel(mod.engineVersion || engine?.version),
       engineInfo.icon,
@@ -147,7 +144,7 @@ function bindModManagerCardActions({
       if (
         FS.getModLaunchState(mod, engine, launchAsStandalone) === "unavailable"
       ) {
-        const engineInfo = ENGINE_DETAILS[mod.engineId];
+        const engineInfo = FS.getEngineDetails(mod.engineId);
         engineUpdateToast.missingEngine(
           mod.engineId,
           getEngineLabel(
@@ -323,7 +320,7 @@ export const cardRenderer = {
       onProcessExit,
     );
 
-    for (const mod of modsToRender) {
+    for (const [index, mod] of modsToRender.entries()) {
       const context = createModManagerCard(
         mod,
         standaloneModIds,
@@ -341,6 +338,7 @@ export const cardRenderer = {
         refreshChangeButtons,
       });
       const { card } = context;
+      card.style.setProperty("--card-index", String(Math.min(index, 7)));
       fragment.appendChild(card);
     }
 

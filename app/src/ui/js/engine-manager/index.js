@@ -16,8 +16,10 @@ import {
 } from "../engines/utils.js";
 import { resolveItchDownloadUrl } from "../../../backend/providers/itch/itch-release.provider.js";
 import { downloadEngine } from "../engines/downloadEngine.js";
+import { engineInstallToast } from "../engines/engineInstallToast.js";
 import { rememberInstalledEngineBuild } from "../engines/engineUpdateService.js";
 import { fetchAndRenderReleaseNotes } from "../engines/releaseNotes.js";
+import { customEngineModal } from "./customEngineModal.js";
 import {
   activateCheckoutDialog,
   deactivateCheckoutDialog,
@@ -29,6 +31,8 @@ import {
   setEngineOrder,
   setEngineVersionOrder,
   setPreferredEngineVersion,
+  getEngineVersionName,
+  setEngineVersionName,
 } from "../../../backend/config/engine-preferences.js";
 
 function sortableItems(container, selector) {
@@ -49,8 +53,7 @@ function normalizeEngineVersions(releases) {
         "";
       return {
         ...release,
-        version:
-          release.version || extractVersionFallback(sampleLink),
+        version: release.version || extractVersionFallback(sampleLink),
       };
     })
     .filter((release) => release.version && release.version !== "Unknown")
@@ -62,6 +65,144 @@ function normalizeEngineVersions(releases) {
         sensitivity: "base",
       });
     });
+}
+
+function getInstalledVersionLabel(engineId, version) {
+  const name = getEngineVersionName(engineId, version, version);
+  return name === version ? version : `${name} (${version})`;
+}
+
+function getEngineDetails(engineId) {
+  return (
+    FS.getEngineDetails(engineId) ||
+    ENGINE_DETAILS[engineId] || {
+      name: engineId,
+      icon: "exe.png",
+    }
+  );
+}
+
+function setButtonIcon(button, iconClass) {
+  const icon = button.querySelector("i") || document.createElement("i");
+  icon.className = iconClass;
+  if (!icon.parentNode) button.appendChild(icon);
+}
+
+function bindCustomVersionActions({
+  item,
+  engineId,
+  version,
+  displayName,
+  onProcessFinished,
+}) {
+  const launchBtn = item.querySelector(".engine-launch-btn");
+  const updateLaunchButton = () => {
+    const running = FS.isEngineRunning(engineId, version);
+    if (!launchBtn) return;
+    launchBtn.innerHTML = `<i class="fa-solid ${running ? "fa-stop" : "fa-play"}" aria-hidden="true"></i>`;
+    launchBtn.title = t(
+      running
+        ? "engineManager.closeCustomEngine"
+        : "engineManager.launchCustomEngine",
+    );
+    launchBtn.setAttribute("aria-label", launchBtn.title);
+  };
+  updateLaunchButton();
+  launchBtn?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    launchBtn.disabled = true;
+    setButtonIcon(launchBtn, "fa-solid fa-spinner fa-spin");
+    try {
+      if (FS.isEngineRunning(engineId, version)) {
+        await FS.closeEngine(engineId, version, updateLaunchButton);
+      } else {
+        await FS.injectModsIntoEngine(engineId, version);
+        await FS.runEngine(engineId, version, (state) => {
+          updateLaunchButton();
+          if (state === "completed" || state === "error") onProcessFinished();
+        });
+      }
+    } catch (error) {
+      errorHandler.show({
+        error,
+        action: t("engineManager.launchCustomEngine"),
+        item: displayName,
+        version,
+        storagePath: FS.weekboxPath,
+      });
+    } finally {
+      launchBtn.disabled = false;
+      updateLaunchButton();
+    }
+  });
+}
+
+function configureCustomVersionActions({
+  item,
+  engineId,
+  version,
+  displayName,
+  onProcessFinished,
+}) {
+  const launchBtn = item.querySelector(".engine-launch-btn");
+  if (FS.isCustomEngine(engineId)) {
+    bindCustomVersionActions({
+      item,
+      engineId,
+      version,
+      displayName,
+      onProcessFinished,
+    });
+    return;
+  }
+  launchBtn?.remove();
+}
+
+function renameInstalledVersion(engineId, version, onSaved) {
+  const template = document.getElementById("tpl-engine-rename-modal");
+  if (!template) return;
+  const modal = template.content.firstElementChild.cloneNode(true);
+  const dialog = modal.querySelector(".engine-rename-dialog");
+  const input = modal.querySelector(".engine-rename-input");
+  const currentName = getEngineVersionName(engineId, version, version);
+  input.value = currentName;
+  input.maxLength = 80;
+  input.setAttribute("aria-label", t("engineManager.renameVersion"));
+  document.body.appendChild(modal);
+  i18n.apply(modal);
+  let finished = false;
+  const finish = (save) => {
+    if (finished) return;
+    finished = true;
+    if (save) setEngineVersionName(engineId, version, input.value, version);
+    deactivateCheckoutDialog(modal);
+    modal.classList.remove("show");
+    setTimeout(() => modal.remove(), 220);
+    onSaved?.();
+  };
+  modal
+    .querySelector(".engine-rename-cancel")
+    .addEventListener("click", () => finish(false));
+  modal
+    .querySelector(".engine-rename-save")
+    .addEventListener("click", () => finish(true));
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) finish(false);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      finish(false);
+    }
+  });
+  modal.hidden = false;
+  requestAnimationFrame(() => {
+    modal.classList.add("show");
+    activateCheckoutDialog(modal, dialog, input, () => finish(false));
+  });
 }
 
 function setupAnimatedSortable(
@@ -440,9 +581,15 @@ export const engineManagerModal = {
       container.classList.remove("engine-manager-body--switched"),
     );
   },
-  renderEngineChooser() {
+  async renderEngineChooser() {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return;
+    const installedCustomEngineIds = new Set(
+      (await FS.getInstalledEngines())
+        .filter((engine) => engine.custom)
+        .map((engine) => engine.id),
+    );
+    if (!this.isPickerOpen || !container.isConnected) return;
     const panel = document.createElement("section");
     panel.className = "engine-download-picker engine-download-picker--chooser";
     const header = document.createElement("header");
@@ -452,41 +599,57 @@ export const engineManagerModal = {
     back.className = "engine-download-picker__back";
     back.title = t("common.back");
     back.setAttribute("aria-label", t("common.back"));
-    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.innerHTML =
+      '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
     back.addEventListener("click", () => void this.returnToInstalledEngines());
     const title = document.createElement("h3");
     title.textContent = t("engines.select");
     header.append(back, title);
     const grid = document.createElement("div");
     grid.className = "engine-download-picker__engine-grid";
-    Object.entries(ENGINE_DETAILS)
-      .filter(([engineId]) => engineId !== "executable")
+    Object.entries(FS.getAllEngineDetails())
+      .filter(
+        ([engineId, details]) =>
+          engineId !== "executable" &&
+          (!details.custom || installedCustomEngineIds.has(engineId)),
+      )
       .forEach(([engineId, details]) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "engine-download-picker__engine";
         button.dataset.engineId = engineId;
         const icon = document.createElement("img");
-        icon.src = `assets/icons/${details.icon}`;
+        icon.src = FS.getEngineIconSource(engineId);
         icon.alt = "";
         const name = document.createElement("span");
         name.textContent = getEngineLabel(engineId, details.name);
         button.append(icon, name);
-        button.addEventListener("click", () =>
-          void this.showDownloadPicker(engineId, "chooser"),
+        button.addEventListener(
+          "click",
+          () => void this.showDownloadPicker(engineId, "chooser"),
         );
         grid.appendChild(button);
       });
+    const importButton = document.createElement("button");
+    importButton.type = "button";
+    importButton.className =
+      "engine-download-picker__engine engine-download-picker__engine--import";
+    importButton.innerHTML = `<i class="fa-solid fa-folder-plus" aria-hidden="true"></i><span>${t("engineManager.importCustomEngine")}</span>`;
+    importButton.addEventListener("click", () => {
+      this.isPickerOpen = false;
+      this.pickerRequestId += 1;
+      void customEngineModal.open({
+        onImported: () => this.loadInstalledEngines(),
+      });
+    });
+    grid.appendChild(importButton);
     panel.append(header, grid);
     container.replaceChildren(panel);
   },
   renderDownloadPicker(engineId, versions, returnTo = "chooser") {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return null;
-    const details = ENGINE_DETAILS[engineId] || {
-      name: engineId,
-      icon: "exe.png",
-    };
+    const details = getEngineDetails(engineId);
     const panel = document.createElement("section");
     panel.className = "engine-download-picker";
     const header = document.createElement("header");
@@ -496,16 +659,19 @@ export const engineManagerModal = {
     back.className = "engine-download-picker__back";
     back.title = t("common.back");
     back.setAttribute("aria-label", t("common.back"));
-    back.innerHTML = '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
-    back.addEventListener("click", () =>
-      void (returnTo === "installed"
-        ? this.returnToInstalledEngines()
-        : this.showDownloadPicker()),
+    back.innerHTML =
+      '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i>';
+    back.addEventListener(
+      "click",
+      () =>
+        void (returnTo === "installed"
+          ? this.returnToInstalledEngines()
+          : this.showDownloadPicker()),
     );
     const heading = document.createElement("div");
     heading.className = "engine-download-picker__identity";
     const icon = document.createElement("img");
-    icon.src = `assets/icons/${details.icon}`;
+    icon.src = FS.getEngineIconSource(engineId);
     icon.alt = "";
     const title = document.createElement("h3");
     title.textContent = getEngineLabel(engineId, details.name);
@@ -521,14 +687,11 @@ export const engineManagerModal = {
     notes.className = "engine-download-picker__notes markdown-body";
     const footer = document.createElement("footer");
     footer.className = "engine-download-picker__footer";
-    const status = document.createElement("span");
-    status.className = "engine-download-picker__status";
-    status.setAttribute("role", "status");
     const download = document.createElement("button");
     download.type = "button";
     download.className = "engine-download-picker__download";
     download.textContent = t("common.download");
-    footer.append(status, download);
+    footer.append(download);
     main.append(versionsList, notes);
     panel.append(header, main, footer);
     container.replaceChildren(panel);
@@ -543,6 +706,12 @@ export const engineManagerModal = {
       button.textContent = versionData.label || versionData.version;
       button.addEventListener("click", () => {
         selected = versionData;
+        if (activeInstall?.version !== selected.version) {
+          activeInstall = null;
+          download.classList.remove("is-cancel");
+          download.textContent = t("common.download");
+          download.disabled = false;
+        }
         versionsList
           .querySelectorAll(".engine-download-picker__version")
           .forEach((option) =>
@@ -553,6 +722,19 @@ export const engineManagerModal = {
           getTargetLink(versionData),
           notes,
         );
+        const task = downloadEngine.getActiveTask(engineId, selected.version);
+        if (task) {
+          activeInstall = {
+            engineId,
+            version: selected.version,
+            name: getEngineLabel(engineId, details.name),
+          };
+          download.disabled = true;
+          download.classList.add("is-cancel");
+          download.textContent = t("common.cancel");
+          engineInstallToast.show(activeInstall, cancelInstall);
+          updateInstallProgress(task.progressInfo);
+        }
       });
       versionsList.appendChild(button);
     });
@@ -560,10 +742,54 @@ export const engineManagerModal = {
     if (selected)
       void fetchAndRenderReleaseNotes(selected, getTargetLink(selected), notes);
     download.disabled = !selected;
+    let activeInstall = null;
+    let cancelRequested = false;
+    const updateInstallProgress = (progressInfo) => {
+      if (activeInstall) engineInstallToast.update(activeInstall, progressInfo);
+    };
+    const cancelInstall = async () => {
+      if (!activeInstall) return;
+      cancelRequested = true;
+      download.disabled = true;
+      download.textContent = t("downloads.cancelling");
+      engineInstallToast.cancel(activeInstall);
+      await downloadEngine.cancel(
+        activeInstall.engineId,
+        activeInstall.version,
+      );
+      engineInstallToast.hide(activeInstall);
+    };
+    const existingTask = selected
+      ? downloadEngine.getActiveTask(engineId, selected.version)
+      : null;
+    if (existingTask && selected) {
+      activeInstall = {
+        engineId,
+        version: selected.version,
+        name: getEngineLabel(engineId, details.name),
+      };
+      download.disabled = true;
+      download.classList.add("is-cancel");
+      download.textContent = t("common.cancel");
+      engineInstallToast.show(activeInstall, cancelInstall);
+      updateInstallProgress(existingTask.progressInfo);
+    }
     download.addEventListener("click", async () => {
+      if (activeInstall) {
+        void cancelInstall();
+        return;
+      }
       if (!selected || download.disabled) return;
       download.disabled = true;
-      status.textContent = t("engines.startingDownload");
+      download.classList.add("is-cancel");
+      download.textContent = t("common.cancel");
+      cancelRequested = false;
+      activeInstall = {
+        engineId,
+        version: selected.version,
+        name: getEngineLabel(engineId, details.name),
+      };
+      engineInstallToast.show(activeInstall, cancelInstall);
       try {
         let downloadUrl = getTargetLink(selected);
         const targetPlatform = getTargetItchPlatform(selected);
@@ -578,22 +804,30 @@ export const engineManagerModal = {
           engineId,
           selected.version,
           downloadUrl,
-          (progressInfo) => {
-            const progress = Math.floor(Number(progressInfo?.progress) || 0);
-            status.textContent = `${progress}% - ${progressInfo?.status || t("engines.working")}`;
-          },
-          () => {},
+          updateInstallProgress,
+          undefined,
           { expectedSize: getTargetSize(selected) },
         );
-        if (!success) throw new Error(t("engines.installationFailed"));
+        if (!success) {
+          if (cancelRequested) return;
+          throw new Error(t("engines.installationFailed"));
+        }
         await rememberInstalledEngineBuild(engineId, selected);
-        status.textContent = t("engines.downloadCompleteExtracting");
+        engineInstallToast.complete(activeInstall);
         document.dispatchEvent(new CustomEvent("mods-updated"));
       } catch (error) {
+        if (cancelRequested) return;
         console.error("Could not download engine version", error);
-        status.textContent = t("engines.downloadFailed");
+        engineInstallToast.error(
+          activeInstall,
+          t("engines.installationFailed"),
+        );
       } finally {
-        download.disabled = false;
+        if (cancelRequested) engineInstallToast.hide(activeInstall);
+        activeInstall = null;
+        download.classList.remove("is-cancel");
+        download.textContent = t("common.download");
+        download.disabled = !selected;
       }
     });
     return panel;
@@ -601,13 +835,22 @@ export const engineManagerModal = {
   async showDownloadPicker(engineId, returnTo = "chooser") {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return;
+    if (engineId && FS.isCustomEngine(engineId) && !ENGINE_DETAILS[engineId]) {
+      this.isPickerOpen = false;
+      this.pickerRequestId += 1;
+      await customEngineModal.open({
+        engineId,
+        onImported: () => this.loadInstalledEngines(),
+      });
+      return;
+    }
     this.isPickerOpen = true;
     const requestId = ++this.pickerRequestId;
     container.classList.add("engine-manager-body--switching");
     await new Promise((resolve) => setTimeout(resolve, 120));
     if (requestId !== this.pickerRequestId) return;
     if (!engineId) {
-      this.renderEngineChooser();
+      await this.renderEngineChooser();
     } else {
       const panel = this.renderDownloadPicker(engineId, [], returnTo);
       const loadingList = panel?.querySelector(
@@ -634,8 +877,9 @@ export const engineManagerModal = {
     } catch (error) {
       if (requestId !== this.pickerRequestId) return;
       const panel = this.renderDownloadPicker(engineId, [], returnTo);
-      panel.querySelector(".engine-download-picker__versions").textContent =
-        t("network.noCompatibleReleases");
+      panel.querySelector(".engine-download-picker__versions").textContent = t(
+        "network.noCompatibleReleases",
+      );
       console.warn("Could not load engine versions", error);
     }
   },
@@ -666,9 +910,11 @@ export const engineManagerModal = {
       addEngineButton.className = "em-index-add engine-manager-empty-add";
       addEngineButton.title = t("engines.select");
       addEngineButton.setAttribute("aria-label", t("engines.select"));
-      addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
-      addEngineButton.addEventListener("click", () =>
-        void this.showDownloadPicker(),
+      addEngineButton.innerHTML =
+        '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+      addEngineButton.addEventListener(
+        "click",
+        () => void this.showDownloadPicker(),
       );
       container.appendChild(addEngineButton);
       return;
@@ -724,19 +970,10 @@ export const engineManagerModal = {
       container.append(viewport, indexContainer);
     }
 
-    const setButtonIcon = (btn, iconClass) => {
-      let icon = btn.querySelector("i");
-      if (!icon) {
-        icon = document.createElement("i");
-        btn.appendChild(icon);
-      }
-      icon.className = iconClass;
-    };
-
     const syncEngineOrder = () => {
-      const orderedIds = [...indexContainer.querySelectorAll(".em-index-icon")].map(
-        (icon) => icon.dataset.engineId,
-      );
+      const orderedIds = [
+        ...indexContainer.querySelectorAll(".em-index-icon"),
+      ].map((icon) => icon.dataset.engineId);
       orderedIds.forEach((engineId) => {
         const card = [...track.children].find(
           (candidate) => candidate.dataset.engineId === engineId,
@@ -760,10 +997,7 @@ export const engineManagerModal = {
 
     // 4. Generar las tarjetas y los iconos del índice
     sortedEngineEntries.forEach(([engineId, versions]) => {
-      const details = ENGINE_DETAILS[engineId] || {
-        name: engineId,
-        icon: "exe.png",
-      };
+      const details = getEngineDetails(engineId);
       const displayName = getEngineLabel(engineId, details.name);
       const card = document.createElement("div");
       card.className = "engine-column";
@@ -781,7 +1015,7 @@ export const engineManagerModal = {
       if (headerTpl) {
         header = headerTpl.content.firstElementChild.cloneNode(true);
         const img = header.querySelector(".engine-col-icon");
-        img.src = `assets/icons/${details.icon}`;
+        img.src = FS.getEngineIconSource(engineId);
         img.alt = displayName;
         const nameSpan = header.querySelector(".engine-col-name");
         nameSpan.textContent = displayName;
@@ -789,7 +1023,7 @@ export const engineManagerModal = {
         header = document.createElement("div");
         header.className = "engine-column-header";
         const img = document.createElement("img");
-        img.src = `assets/icons/${details.icon}`;
+        img.src = FS.getEngineIconSource(engineId);
         img.alt = displayName;
         img.className = "engine-col-icon";
         img.crossOrigin = "anonymous";
@@ -809,6 +1043,59 @@ export const engineManagerModal = {
       }
       card.appendChild(header);
 
+      if (FS.isCustomEngine(engineId) && !ENGINE_DETAILS[engineId]) {
+        const familyActions = document.createElement("div");
+        familyActions.className = "engine-custom-family-actions";
+        const editFamily = document.createElement("button");
+        editFamily.type = "button";
+        editFamily.className = "engine-custom-family-action";
+        editFamily.title = t("engineManager.editEngineFamily");
+        editFamily.setAttribute("aria-label", editFamily.title);
+        editFamily.innerHTML =
+          '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+        editFamily.addEventListener("click", (event) => {
+          event.stopPropagation();
+          void customEngineModal.open({
+            mode: "settings",
+            engineId,
+            onSaved: () => this.loadInstalledEngines(),
+          });
+        });
+        const deleteFamily = document.createElement("button");
+        deleteFamily.type = "button";
+        deleteFamily.className =
+          "engine-custom-family-action engine-custom-family-action--delete";
+        deleteFamily.title = t("engineManager.deleteEngineFamily");
+        deleteFamily.setAttribute("aria-label", deleteFamily.title);
+        deleteFamily.innerHTML =
+          '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+        deleteFamily.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const choice = await Neutralino.os.showMessageBox(
+            t("engineManager.deleteEngineFamily"),
+            t("engineManager.deleteEngineFamilyMessage", { name: displayName }),
+            "YES_NO",
+            "WARNING",
+          );
+          if (choice !== "YES") return;
+          deleteFamily.disabled = true;
+          try {
+            await FS.removeCustomEngine(engineId);
+            await this.loadInstalledEngines();
+          } catch (error) {
+            deleteFamily.disabled = false;
+            errorHandler.show({
+              error,
+              action: t("engineManager.deleteEngineFamily"),
+              item: displayName,
+              storagePath: FS.weekboxPath,
+            });
+          }
+        });
+        familyActions.append(editFamily, deleteFamily);
+        header.appendChild(familyActions);
+      }
+
       // Aplicar color extraído con la nueva utilidad y opciones personalizadas
       const imgEl = header.querySelector(".engine-col-icon");
       applyDominantColor(imgEl, card, {
@@ -825,6 +1112,7 @@ export const engineManagerModal = {
         engineId,
         orderedVersions,
       );
+      const canonicalName = getEngineLabel(engineId, details.name);
       const saveVersionOrder = () =>
         setEngineVersionOrder(
           engineId,
@@ -863,7 +1151,9 @@ export const engineManagerModal = {
           item = itemTpl.content.firstElementChild.cloneNode(true);
           item.dataset.version = version;
           item.draggable = false;
-          item.querySelector(".version-text").textContent = version;
+          const versionText = item.querySelector(".version-text");
+          versionText.textContent = getInstalledVersionLabel(engineId, version);
+          versionText.title = `${canonicalName} · ${version}`;
           const updateBtn = item.querySelector(".engine-update-btn");
           if (!hasUpdate && updateBtn) {
             updateBtn.remove();
@@ -891,6 +1181,9 @@ export const engineManagerModal = {
               : t("engineManager.uninstallVersion"),
           );
           deleteBtn.disabled = running;
+          const renameBtn = item.querySelector(".engine-rename-btn");
+          renameBtn.title = t("engineManager.renameVersion");
+          renameBtn.setAttribute("aria-label", renameBtn.title);
         } else {
           item = document.createElement("div");
           item.className = "version-item";
@@ -898,9 +1191,16 @@ export const engineManagerModal = {
           item.draggable = false;
           const versionText = document.createElement("span");
           versionText.className = "version-text";
-          versionText.textContent = version;
+          versionText.textContent = getInstalledVersionLabel(engineId, version);
+          versionText.title = `${canonicalName} · ${version}`;
           const actions = document.createElement("div");
           actions.className = "version-actions";
+
+          const launchBtn = document.createElement("button");
+          launchBtn.className = "engine-action-btn engine-launch-btn";
+          launchBtn.type = "button";
+          launchBtn.innerHTML =
+            '<i class="fa-solid fa-play" aria-hidden="true"></i>';
 
           if (hasUpdate) {
             const updateBtn = document.createElement("button");
@@ -946,6 +1246,15 @@ export const engineManagerModal = {
           deleteIcon.className = "fa-solid fa-trash";
           deleteBtn.appendChild(deleteIcon);
 
+          const renameBtn = document.createElement("button");
+          renameBtn.className = "engine-action-btn engine-rename-btn";
+          renameBtn.type = "button";
+          renameBtn.title = t("engineManager.renameVersion");
+          renameBtn.setAttribute("aria-label", renameBtn.title);
+          const renameIcon = document.createElement("i");
+          renameIcon.className = "fa-solid fa-pen";
+          renameBtn.appendChild(renameIcon);
+
           const preferredBtn = document.createElement("button");
           preferredBtn.className = "engine-action-btn engine-preferred-btn";
           preferredBtn.type = "button";
@@ -953,9 +1262,17 @@ export const engineManagerModal = {
           preferredIcon.className = "fa-solid fa-star";
           preferredIcon.setAttribute("aria-hidden", "true");
           preferredBtn.appendChild(preferredIcon);
-          actions.append(dirBtn, deleteBtn, preferredBtn);
+          actions.append(launchBtn, dirBtn, renameBtn, deleteBtn, preferredBtn);
           item.append(versionText, actions);
         }
+
+        configureCustomVersionActions({
+          item,
+          engineId,
+          version,
+          displayName,
+          onProcessFinished: () => this.loadInstalledEngines(),
+        });
 
         item.classList.toggle("is-preferred", preferredVersion === version);
         const preferredBtn = item.querySelector(".engine-preferred-btn");
@@ -1028,10 +1345,19 @@ export const engineManagerModal = {
           .querySelector(".engine-dir-btn")
           ?.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const targetPath = `${FS.enginesPath}/${engineId}/${version}`;
+            const targetPath = FS.getEnginePath(engineId, version);
             try {
               await Neutralino.os.open(targetPath);
             } catch (e) {}
+          });
+
+        item
+          .querySelector(".engine-rename-btn")
+          .addEventListener("click", (e) => {
+            e.stopPropagation();
+            renameInstalledVersion(engineId, version, () =>
+              this.loadInstalledEngines(),
+            );
           });
 
         const deleteBtn = item.querySelector(".engine-delete-btn");
@@ -1040,7 +1366,7 @@ export const engineManagerModal = {
           if (FS.isEngineRunning(engineId, version)) return;
           deleteBtn.disabled = true;
           setButtonIcon(deleteBtn, "fa-solid fa-spinner fa-spin");
-          const targetPath = `${FS.enginesPath}/${engineId}/${version}`;
+          const targetPath = FS.getEnginePath(engineId, version);
           try {
             if (await FS.api.exists(targetPath)) {
               await FS.api.remove(targetPath);
@@ -1091,7 +1417,7 @@ export const engineManagerModal = {
       indexIcon.dataset.engineId = engineId;
       indexIcon.draggable = false;
       const indexImage = document.createElement("img");
-      indexImage.src = `assets/icons/${details.icon}`;
+      indexImage.src = FS.getEngineIconSource(engineId);
       indexImage.alt = "";
       indexImage.draggable = false;
       indexImage.onerror = () => (indexImage.src = "assets/icons/exe.png");
@@ -1112,9 +1438,7 @@ export const engineManagerModal = {
           : ["ArrowRight", "ArrowDown"].includes(event.key)
             ? 1
             : 0;
-        const target = direction
-          ? icons[iconIndex + direction]
-          : null;
+        const target = direction ? icons[iconIndex + direction] : null;
         if (!target) return;
         event.preventDefault();
         reorderEngines(indexIcon, target, direction < 0);
@@ -1132,9 +1456,11 @@ export const engineManagerModal = {
     addEngineButton.className = "em-index-add";
     addEngineButton.title = t("engines.select");
     addEngineButton.setAttribute("aria-label", t("engines.select"));
-    addEngineButton.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
-    addEngineButton.addEventListener("click", () =>
-      void this.showDownloadPicker(),
+    addEngineButton.innerHTML =
+      '<i class="fa-solid fa-plus" aria-hidden="true"></i>';
+    addEngineButton.addEventListener(
+      "click",
+      () => void this.showDownloadPicker(),
     );
     indexContainer.appendChild(addEngineButton);
     // 5. L gica de c lculo y actualizaci n del Carrusel
@@ -1149,14 +1475,13 @@ export const engineManagerModal = {
       Array.from(track.children).forEach((col, idx) => {
         const active = idx === this.currentIndex;
         col.classList.toggle("active", active);
-        col.querySelector(".engine-version-add")?.toggleAttribute(
-          "disabled",
-          !active,
-        );
+        col
+          .querySelector(".engine-version-add")
+          ?.toggleAttribute("disabled", !active);
       });
       Array.from(indexContainer.querySelectorAll(".em-index-icon")).forEach(
         (icon, idx) => {
-        icon.classList.toggle("active", idx === this.currentIndex);
+          icon.classList.toggle("active", idx === this.currentIndex);
         },
       );
       btnPrev.style.display = this.currentIndex === 0 ? "none" : "flex";

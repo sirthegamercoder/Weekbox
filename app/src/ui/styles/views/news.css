@@ -88,7 +88,11 @@
   position: relative;
   isolation: isolate;
   transform: translateY(0);
-  transition: transform 160ms ease-out;
+  animation: card-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 45ms);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .news-view__card::before {
@@ -117,6 +121,7 @@
 .news-view__card:hover,
 .news-view__card:focus-visible {
   transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 18%);
 }
 
 .news-view__card:hover::before,
@@ -334,6 +339,22 @@
 .news-detail-modal__link:hover,
 .news-detail-modal__link:focus-visible {
   text-decoration: underline;
+}
+
+.whats-new-modal {
+  z-index: 22000;
+}
+
+.whats-new-modal__content {
+  width: min(92vw, 860px);
+  height: auto;
+  max-height: min(88vh, 820px);
+  min-height: 0;
+  border: 0;
+}
+
+.whats-new-modal .news-detail-modal__body:focus {
+  outline: 0;
 }
 
 @media (max-width: 560px) {

@@ -1,5 +1,5 @@
 import { modModal } from "../modal/index.js";
-import { ENGINE_DETAILS } from "../../../../backend/config/engines.config.js";
+import { FS } from "../../../../backend/services/filesystem.js";
 import {
   applyDominantColor,
   hasCachedDominantColor,
@@ -22,6 +22,10 @@ export function createCard(mod, index) {
   card.type = "button";
   card.className = "mod-card";
   card.dataset.modId = String(mod.id);
+  card.style.setProperty(
+    "--card-index",
+    String(Math.min(Number(index) || 0, 7)),
+  );
   if (isPeo) card.classList.add("mod-card--no-author");
 
   const cardBg = document.createElement("div");
@@ -45,14 +49,10 @@ export function createCard(mod, index) {
   imageContainer.appendChild(image);
 
   // Engine / category indicator at top-left
-  const engine = ENGINE_DETAILS[mod.engineId];
+  const engine = FS.getEngineDetails(mod.engineId);
   const engineIndicator = document.createElement("span");
   engineIndicator.className = "grid-engine-indicator";
-  const labelKey = engine
-    ? engineLabelKeys[mod.engineId]
-    : mod.gameId === 8694
-      ? "home.baseGame"
-      : "import.unassigned";
+  const labelKey = engine ? engineLabelKeys[mod.engineId] : "home.noEngine";
   const engineName = labelKey ? t(labelKey) : engine?.name || "";
   engineIndicator.dataset.labelKey = labelKey || "";
   engineIndicator.dataset.label = engineName;
@@ -61,14 +61,9 @@ export function createCard(mod, index) {
 
   if (engine?.icon) {
     const engineIcon = document.createElement("img");
-    engineIcon.src = `assets/icons/${engine.icon}`;
+    engineIcon.src = FS.getEngineIconSource(mod.engineId);
     engineIcon.alt = "";
     engineIndicator.appendChild(engineIcon);
-  } else if (mod.gameId === 8694) {
-    const fnfIcon = document.createElement("img");
-    fnfIcon.src = "assets/icons/vslice.png";
-    fnfIcon.alt = "";
-    engineIndicator.appendChild(fnfIcon);
   } else {
     const defaultIcon = document.createElement("i");
     defaultIcon.className = "fa-solid fa-question-circle";

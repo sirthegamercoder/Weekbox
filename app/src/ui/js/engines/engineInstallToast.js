@@ -1,5 +1,5 @@
 import { toastDownloadMod } from "../home/modal/toastDownloadMod.js";
-import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { t } from "../i18n/index.js";
 
 function getToastId(engineId, version) {
@@ -7,19 +7,14 @@ function getToastId(engineId, version) {
 }
 
 export const engineInstallToast = {
-  show(install) {
+  show(install, onCancel) {
     if (!install) return null;
     const { engineId, version, name } = install;
     const toastId = getToastId(engineId, version);
     if (!toastDownloadMod.toasts.has(toastId)) {
-      toastDownloadMod.show(
-        toastId,
-        t("downloads.installingEngine", { name }),
-        null,
-        {
-          iconHtml: `<img src="assets/icons/${ENGINE_DETAILS[engineId]?.icon || "exe.png"}" alt="" />`,
-        },
-      );
+      toastDownloadMod.show(toastId, `${name} · ${version}`, onCancel, {
+        iconHtml: `<img src="${FS.getEngineIconSource(engineId)}" alt="" />`,
+      });
     }
     return toastId;
   },
@@ -39,6 +34,12 @@ export const engineInstallToast = {
     const toastId = this.show(install);
     if (!toastId) return;
     toastDownloadMod.success(toastId);
+  },
+
+  cancel(install) {
+    const toastId = this.show(install);
+    if (!toastId) return;
+    toastDownloadMod.cancelAnim(toastId);
   },
 
   error(install, message) {

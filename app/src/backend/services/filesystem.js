@@ -4,6 +4,7 @@ import { LibraryMaintenanceService } from "./filesystem/library-maintenance.serv
 import { ModCoverService } from "./filesystem/mod-cover.service.js";
 import { ModInjectionService } from "./filesystem/mod-injection.service.js";
 import { ModRepository } from "./filesystem/mod-repository.service.js";
+import { CustomEngineRepository } from "./filesystem/custom-engine-repository.service.js";
 import { ProcessService } from "./processes/process.service.js";
 import { appSettings } from "../core/system/settings.service.js";
 import {
@@ -295,6 +296,7 @@ async function completeStorageMove(
   markerPath,
 ) {
   service.setStoragePaths(destinationBasePath);
+  await service.customEngines.load();
   await appSettings.setDataPath(destinationBasePath);
   await appSettings.write();
   const movedMods = (await service.mods.getAll()) || [];
@@ -352,7 +354,11 @@ async function prepareLocalModImport(
       ? "mod"
       : kind
     : "mod";
-  if (requestedKind === "addon" && resolvedEngineId !== "codename") {
+  if (
+    requestedKind === "addon" &&
+    resolvedEngineId !== "codename" &&
+    !service.isCustomEngine(resolvedEngineId)
+  ) {
     throw new Error("Addons are only available for Codename Engine mods");
   }
   const folderName = await service.getAvailableLocalModFolderName(modName);
@@ -402,6 +408,171 @@ async function removeModFiles(service, mod, folderName) {
   }
 }
 
+async function copyCustomEngineInstall(
+  service,
+  { source, resolvedId, version, executable, details },
+) {
+  const installId = `${version}-${crypto.randomUUID().slice(0, 8)}`;
+  const stagingPath = `${service.enginesPath}/.custom-install-${crypto.randomUUID()}`;
+  const destinationPath = `${service.enginesPath}/${resolvedId}/${installId}`;
+  try {
+    await service.api.ensureDir(`${service.enginesPath}/${resolvedId}`);
+    await Neutralino.filesystem.copy(source, stagingPath, {
+      recursive: true,
+      overwrite: false,
+      skip: false,
+    });
+    const requestedExecutable = String(executable || details.executable || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
+    const requestedExecutablePath = `${stagingPath}/${requestedExecutable}`;
+    const stagedExecutable =
+      requestedExecutable && (await service.api.exists(requestedExecutablePath))
+        ? requestedExecutablePath
+        : await service.findExecutable(stagingPath);
+    if (!stagedExecutable)
+      throw new Error("The imported folder has no runnable executable.");
+    const stagedPrefix = `${stagingPath}/`;
+    const executableRelative = stagedExecutable.startsWith(stagedPrefix)
+      ? stagedExecutable.slice(stagedPrefix.length)
+      : requestedExecutable;
+    const manifest = {
+      version: 1,
+      engineId: resolvedId,
+      originalVersion: version,
+      executable: executableRelative,
+      modDirectories: Array.isArray(details.contentFolders)
+        ? details.contentFolders
+            .filter((folder) => folder?.path && folder.enabled)
+            .map((folder) => ({
+              path: sanitizePathSegment(folder.path),
+              type: ["mod", "addon", "dependency"].includes(folder.type)
+                ? folder.type
+                : "mod",
+              enabled: true,
+            }))
+        : [],
+      sourceName: source.split("/").at(-1) || source,
+    };
+    await service.api.write(
+      `${stagingPath}/engine.json`,
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+    await service.api.move(stagingPath, destinationPath);
+    return {
+      installId,
+      executable: executableRelative,
+      modDirectories: manifest.modDirectories,
+      sourceName: manifest.sourceName,
+    };
+  } catch (error) {
+    await service.api.remove(stagingPath).catch(() => {});
+    await service.api.remove(destinationPath).catch(() => {});
+    throw error;
+  }
+}
+
+async function importCustomEngineContent(service, install, engineId, version) {
+  const imported = [];
+  const existingMods = await service.mods.getAll();
+  for (const directory of install.modDirectories || []) {
+    if (directory.enabled === false) continue;
+    const sourceDirectory = `${install.path}/${directory.path}`;
+    if (!(await service.api.exists(sourceDirectory))) continue;
+    const entries = getRealEntries(
+      await Neutralino.filesystem
+        .readDirectory(sourceDirectory)
+        .catch(() => []),
+    );
+    for (const entry of entries.filter((item) => item.type === "DIRECTORY")) {
+      const name = entry.entry.trim();
+      if (!name) continue;
+      const sourceEngineFolder = `${directory.path}/${entry.entry}`;
+      const engineFolderName = sanitizePathSegment(name) || name;
+      const sourceMatch = existingMods.find(
+        (mod) =>
+          mod.sourceEngineId === engineId &&
+          mod.sourceEngineVersion === version &&
+          mod.sourceEngineFolder === sourceEngineFolder,
+      );
+      if (sourceMatch) {
+        // ponytail: legacy records have no source metadata; use their engine
+        // content folder identity until content hashes are ever needed.
+        const legacyMatch = existingMods.find(
+          (mod) =>
+            sourceMatch.source === "custom-engine" &&
+            String(sourceMatch.id).startsWith("local-") &&
+            mod !== sourceMatch &&
+            !mod.sourceEngineId &&
+            mod.engineId === engineId &&
+            mod.engineFolderName === engineFolderName &&
+            (!mod.engineVersion || mod.engineVersion === version),
+        );
+        if (legacyMatch) {
+          await removeModFiles(service, sourceMatch, sourceMatch.folderName);
+          legacyMatch.engineVersion = version;
+          legacyMatch.sourceEngineId = engineId;
+          legacyMatch.sourceEngineVersion = version;
+          legacyMatch.sourceEngineFolder = sourceEngineFolder;
+          existingMods.splice(existingMods.indexOf(sourceMatch), 1);
+          await service.mods.saveAll(existingMods);
+        }
+        continue;
+      }
+      const legacyMatch = existingMods.find(
+        (mod) =>
+          !mod.sourceEngineId &&
+          mod.engineId === engineId &&
+          mod.engineFolderName === engineFolderName &&
+          (!mod.engineVersion || mod.engineVersion === version),
+      );
+      if (legacyMatch) {
+        legacyMatch.engineVersion = version;
+        legacyMatch.sourceEngineId = engineId;
+        legacyMatch.sourceEngineVersion = version;
+        legacyMatch.sourceEngineFolder = sourceEngineFolder;
+        await service.mods.saveAll(existingMods);
+        continue;
+      }
+      const folderName = await service.getAvailableLocalModFolderName(name);
+      const modId = `local-${crypto.randomUUID()}`;
+      const destinationPath = `${service.modsPath}/${folderName}`;
+      try {
+        await Neutralino.filesystem.copy(
+          `${sourceDirectory}/${entry.entry}`,
+          destinationPath,
+          { recursive: true, overwrite: false, skip: false },
+        );
+        const kind = ["addon", "dependency"].includes(directory.type)
+          ? directory.type
+          : null;
+        await service.saveInstalledMod(modId, name, {
+          folderName,
+          engineFolderName,
+          engineId,
+          engineVersion: version,
+          ...(kind ? { kind } : {}),
+          source: "custom-engine",
+          sourceEngineId: engineId,
+          sourceEngineVersion: version,
+          sourceEngineFolder,
+        });
+        imported.push(modId);
+      } catch (error) {
+        await service.api.remove(destinationPath).catch(() => {});
+        throw error;
+      }
+    }
+  }
+  const engines = await service.getInstalledEngines();
+  await Promise.all(
+    imported.map((modId) =>
+      service.injection.injectIntoInstalledEngines(modId, engines),
+    ),
+  );
+  return imported;
+}
+
 var RETIRED_ENGINE_IDS = /* @__PURE__ */ new Set(["alepsych"]);
 var _FileSystemService = class _FileSystemService {
   constructor() {
@@ -420,6 +591,10 @@ var _FileSystemService = class _FileSystemService {
     this.api = APIneuFileSystem;
     this.executables = new ExecutableService();
     this.processes = new ProcessService(this.executables);
+    this.customEngines = new CustomEngineRepository({
+      api: this.api,
+      getDataPath: () => this.dataPath,
+    });
     this.activeEngineProcesses = this.processes.activeProcesses;
     this.activeEngineMods = /* @__PURE__ */ new Map();
     this.engineUpdates = /* @__PURE__ */ new Set();
@@ -440,6 +615,7 @@ var _FileSystemService = class _FileSystemService {
       modRepository: this.mods,
       getEnginesPath: () => this.enginesPath,
       getModsPath: () => this.modsPath,
+      getCustomEngine: (engineId) => this.customEngines.get(engineId),
       isEngineRunning: (engineId, version) =>
         this.isEngineRunning(engineId, version),
     });
@@ -450,6 +626,7 @@ var _FileSystemService = class _FileSystemService {
       getEnginesPath: () => this.enginesPath,
       getEngineModsPath: (engineId, version) =>
         this.injection.getEngineModsPath(engineId, version),
+      getCustomEngine: (engineId) => this.customEngines.get(engineId),
       getModsPath: () => this.modsPath,
       getInstalledEngines: () => this.getInstalledEngines(),
       isEngineRunning: (engineId, version) =>
@@ -489,6 +666,7 @@ var _FileSystemService = class _FileSystemService {
       await this.ensureStorageDirectories();
       await this.ensureStorageManifest();
       await this.selectSettingsPath(storagePath);
+      await this.customEngines.load();
     }
     this.isInitialized = true;
     const restoredProcesses = await this.processes.restore();
@@ -528,6 +706,9 @@ var _FileSystemService = class _FileSystemService {
       await runPhase("Checking installed engines\u2026", 92, () =>
         this.cleanupInvalidEngineInstallations(),
       );
+      await runPhase("Cleaning empty custom engine families\u2026", 93, () =>
+        this.cleanupEmptyCustomEngineFamilies(),
+      );
       await runPhase("Checking installed mods\u2026", 94, () =>
         this.cleanupInvalidInstalledMods(),
       );
@@ -541,6 +722,9 @@ var _FileSystemService = class _FileSystemService {
       await runPhase("Scanning engine versions\u2026", 97, async () => {
         installedEngines = await this.getInstalledEngines();
       });
+      await runPhase("Updating custom engine icons\u2026", 97, () =>
+        this.refreshCustomEngineIcons(installedEngines),
+      );
       await runPhase("Updating engine mod folders\u2026", 98, async () => {
         await this.injection.migrateLegacyEngineModsFor(installedEngines);
       });
@@ -849,6 +1033,7 @@ var _FileSystemService = class _FileSystemService {
     await this.ensureStorageDirectories();
     await this.ensureStorageManifest();
     await this.selectSettingsPath(storage.basePath);
+    await this.customEngines.load();
     return this.weekboxPath;
   }
   async moveStorageTo(basePath, onProgress = () => {}, options = {}) {
@@ -1176,13 +1361,30 @@ var _FileSystemService = class _FileSystemService {
   async cleanupInvalidEngineInstallations() {
     return this.maintenance.cleanupInvalidEngineInstallations();
   }
+  async cleanupEmptyCustomEngineFamilies() {
+    const installedVersions = new Set(
+      (await this.getInstalledEngines())
+        .filter((engine) => engine.custom)
+        .map((engine) => `${engine.id}/${engine.version}`),
+    );
+    for (const engine of [...this.customEngines.getAll()]) {
+      const versions = Array.isArray(engine.versions) ? engine.versions : [];
+      const validVersions = versions.filter((version) =>
+        installedVersions.has(`${engine.id}/${version.version}`),
+      );
+      if (!validVersions.length) {
+        await this.removeCustomEngine(engine.id);
+      } else if (validVersions.length !== versions.length) {
+        engine.versions = validVersions;
+        await this.customEngines.upsert(engine);
+      }
+    }
+  }
   async isEngineInstalled(engineId, version) {
     if (!this.isInitialized) return false;
-    if (!Object.prototype.hasOwnProperty.call(ENGINE_DETAILS, engineId)) {
-      return false;
-    }
-    if (!isValidEngineVersion(version)) return false;
-    const path = `${this.enginesPath}/${engineId}/${version}`;
+    const install = this.getEngineInstall(engineId, version);
+    if (!install) return false;
+    const path = install.path;
     if (!(await this.api.exists(path))) return false;
     return (
       !(await this.api.exists(`${path}/.downloading`)) &&
@@ -1192,20 +1394,246 @@ var _FileSystemService = class _FileSystemService {
   async findExecutable(directory) {
     return this.executables.find(directory);
   }
+  async findExecutables(directory) {
+    return this.executables.findAll(directory);
+  }
   getExecutableSearchError() {
     return this.executables.getLastError();
   }
-  async runEngine(engineId, version, onStateChange, args = [], modId = null) {
+  isCustomEngine(engineId) {
+    return Boolean(this.customEngines.get(engineId));
+  }
+  getCustomEngines() {
+    return this.customEngines.getAll();
+  }
+  getEngineDetails(engineId) {
+    const custom = this.customEngines.get(engineId);
+    return (
+      ENGINE_DETAILS[engineId] ||
+      (custom
+        ? { ...custom, icon: custom.icon || "exe.png", custom: true }
+        : null)
+    );
+  }
+  getAllEngineDetails() {
+    const customDetails = Object.fromEntries(
+      this.customEngines.getAll().map((engine) => [
+        engine.id,
+        {
+          ...ENGINE_DETAILS[engine.id],
+          name: ENGINE_DETAILS[engine.id]?.name || engine.name,
+          icon: ENGINE_DETAILS[engine.id]?.icon || engine.icon || "exe.png",
+          custom: true,
+        },
+      ]),
+    );
+    return {
+      ...ENGINE_DETAILS,
+      ...customDetails,
+    };
+  }
+  getEngineInstall(engineId, version) {
+    const custom = this.customEngines.get(engineId);
+    if (custom) {
+      const record = custom.versions.find(
+        (candidate) => candidate.version === version,
+      );
+      if (record)
+        return {
+          ...record,
+          id: engineId,
+          version: record.version,
+          path: `${this.enginesPath}/${engineId}/${record.installId}`,
+        };
+    }
     if (
       !Object.prototype.hasOwnProperty.call(ENGINE_DETAILS, engineId) ||
       !isValidEngineVersion(version)
+    )
+      return null;
+    return {
+      id: engineId,
+      version,
+      installId: version,
+      path: `${this.enginesPath}/${engineId}/${version}`,
+    };
+  }
+  getEnginePath(engineId, version) {
+    return this.getEngineInstall(engineId, version)?.path || "";
+  }
+  getEngineIconSource(engineId) {
+    const icon = this.getEngineDetails(engineId)?.icon || "exe.png";
+    return /^(?:data|blob|https?):/i.test(icon) ? icon : `assets/icons/${icon}`;
+  }
+  async inspectCustomEngine(sourcePath) {
+    const normalizedSource = trimPath(sourcePath);
+    if (!normalizedSource) throw new Error("Choose an engine folder first");
+    const stats = await Neutralino.filesystem.getStats(normalizedSource);
+    if (!stats?.isDirectory)
+      throw new Error("The selected path is not a folder");
+    const executables = await this.findExecutables(normalizedSource);
+    const executable = executables[0];
+    if (!executable) {
+      const detail = this.getExecutableSearchError();
+      throw new Error(
+        detail
+          ? `WeekBox could not search the engine folder: ${detail}`
+          : "No runnable executable was found in this folder.",
+      );
+    }
+    const sourcePrefix = `${normalizedSource}/`;
+    const executableRelative = executable.startsWith(sourcePrefix)
+      ? executable.slice(sourcePrefix.length)
+      : executable;
+    const entries = getRealEntries(
+      await Neutralino.filesystem.readDirectory(normalizedSource),
+    );
+    const excludedContentFolders = new Set(["manifest", "assets", "plugins"]);
+    const contentFolders = entries
+      .filter(
+        (entry) =>
+          entry.type === "DIRECTORY" &&
+          !excludedContentFolders.has(entry.entry.toLocaleLowerCase()),
+      )
+      .map((entry) => {
+        const name = entry.entry.toLocaleLowerCase();
+        return {
+          path: entry.entry,
+          type: name === "addons" ? "addon" : "mod",
+          enabled: name === "mods" || name === "addons",
+        };
+      });
+    return {
+      name: normalizedSource.split("/").at(-1) || "Custom Engine",
+      version: "Local",
+      executable: executableRelative,
+      executables: executables.map((path) =>
+        path.startsWith(sourcePrefix) ? path.slice(sourcePrefix.length) : path,
+      ),
+      contentFolders,
+    };
+  }
+  async importCustomEngine({
+    sourcePath,
+    engineId = null,
+    name,
+    version = "Local",
+    executable,
+    contentFolders = [],
+    allowLibrarySource = false,
+  }) {
+    this.assertStorageUnlocked();
+    if (!this.isInitialized) throw new Error("WeekBox storage is not ready");
+    const source = trimPath(sourcePath);
+    if (!source) throw new Error("Choose an engine folder first");
+    const isLibraryModSource =
+      pathsOverlap(source, this.modsPath) &&
+      normalizeComparablePath(source) !==
+        normalizeComparablePath(this.modsPath);
+    if (
+      pathsOverlap(source, this.basePath) &&
+      (!allowLibrarySource || !isLibraryModSource)
+    )
+      throw new Error("Choose an engine folder outside your WeekBox library.");
+    const details = await this.inspectCustomEngine(source);
+    const normalizedName = String(name || details.name).trim();
+    const normalizedVersion = sanitizePathSegment(version) || "Local";
+    const resolvedId = engineId || `custom-${crypto.randomUUID()}`;
+    const existingEngine = this.customEngines.get(resolvedId);
+    const executablePath = `${source}/${String(
+      executable || details.executable || "",
+    )
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")}`;
+    const detectedIcon =
+      !existingEngine ||
+      !existingEngine.icon ||
+      existingEngine.icon === "exe.png"
+        ? await this.executables.getIconDataUrl(executablePath)
+        : "";
+    const engine = existingEngine || {
+      id: resolvedId,
+      name: normalizedName,
+      icon: detectedIcon || "exe.png",
+      createdAt: new Date().toISOString(),
+      versions: [],
+    };
+    if (!existingEngine) engine.name = normalizedName || engine.name;
+    if (existingEngine && detectedIcon) engine.icon = detectedIcon;
+    let existing = engine.versions.find(
+      (candidate) => candidate.version === normalizedVersion,
+    );
+    if (
+      existing &&
+      !(await this.api.exists(
+        `${this.enginesPath}/${resolvedId}/${existing.installId}`,
+      ))
     ) {
+      engine.versions = engine.versions.filter(
+        (candidate) => candidate !== existing,
+      );
+      await this.customEngines.upsert(engine);
+      existing = null;
+    }
+    if (existing)
+      throw new Error(`Version ${normalizedVersion} is already imported.`);
+    const install = await copyCustomEngineInstall(this, {
+      source,
+      resolvedId,
+      version: normalizedVersion,
+      executable,
+      details: { ...details, contentFolders },
+    });
+    engine.versions.push({ version: normalizedVersion, ...install });
+    await this.customEngines.upsert(engine);
+    return { id: resolvedId, version: normalizedVersion };
+  }
+  async updateCustomEngine(engineId, { name, icon } = {}) {
+    this.assertStorageUnlocked();
+    const engine = this.customEngines.get(engineId);
+    if (!engine || ENGINE_DETAILS[engineId])
+      throw new Error("Only custom engine families can be edited.");
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) throw new Error("Enter an engine family name.");
+    engine.name = normalizedName.slice(0, 80);
+    if (icon !== undefined) engine.icon = icon || "exe.png";
+    await this.customEngines.upsert(engine);
+    return engine;
+  }
+  async removeCustomEngine(engineId) {
+    this.assertStorageUnlocked();
+    const engine = this.customEngines.get(engineId);
+    if (!engine || ENGINE_DETAILS[engineId])
+      throw new Error("Only custom engine families can be deleted.");
+    if (
+      engine.versions.some((version) =>
+        this.isEngineRunning(engineId, version.version),
+      )
+    ) {
+      throw new Error("Close the custom engine before deleting its family.");
+    }
+    const familyPath = `${this.enginesPath}/${engineId}`;
+    if (await this.api.exists(familyPath)) await this.api.remove(familyPath);
+    await this.customEngines.remove(engineId);
+    return true;
+  }
+  async importCustomEngineMods(engineId, version) {
+    this.assertStorageUnlocked();
+    if (!this.isInitialized) throw new Error("WeekBox storage is not ready");
+    const customEngine = this.customEngines.get(engineId);
+    const install = this.getEngineInstall(engineId, version);
+    if (!customEngine || !install) throw new Error("Custom engine not found");
+    return importCustomEngineContent(this, install, engineId, version);
+  }
+  async runEngine(engineId, version, onStateChange, args = [], modId = null) {
+    const install = this.getEngineInstall(engineId, version);
+    if (!install) {
       onStateChange?.("not_found");
       return false;
     }
-    const executable = await this.findExecutable(
-      `${this.enginesPath}/${engineId}/${version}`,
-    );
+    const executable = install.executable
+      ? `${install.path}/${install.executable}`
+      : await this.findExecutable(install.path);
     if (!executable) {
       onStateChange?.("not_found");
       return false;
@@ -1367,6 +1795,15 @@ var _FileSystemService = class _FileSystemService {
   async getInstalledEngines() {
     if (!this.isInitialized) return [];
     try {
+      const customInstallIds = new Set(
+        this.customEngines
+          .getAll()
+          .flatMap((engine) =>
+            engine.versions.map(
+              (version) => `${engine.id}/${version.installId}`,
+            ),
+          ),
+      );
       const entries = await Neutralino.filesystem.readDirectory(
         this.enginesPath,
       );
@@ -1388,7 +1825,8 @@ var _FileSystemService = class _FileSystemService {
                     version.type === "DIRECTORY" &&
                     isValidEngineVersion(version.entry) &&
                     (engine.entry !== "psychonline" ||
-                      version.entry === "Latest"),
+                      version.entry === "Latest") &&
+                    !customInstallIds.has(`${engine.entry}/${version.entry}`),
                 )
                 .map(async (version) => {
                   const versionPath = `${this.enginesPath}/${engine.entry}/${version.entry}`;
@@ -1402,10 +1840,53 @@ var _FileSystemService = class _FileSystemService {
             return installedVersions.filter(Boolean);
           }),
       );
-      return engines.flat();
+      const installed = engines.flat();
+      const customInstalled = [];
+      for (const engine of this.customEngines.getAll()) {
+        for (const version of engine.versions) {
+          const path = `${this.enginesPath}/${engine.id}/${version.installId}`;
+          if (await this.api.exists(`${path}/.downloading`)) continue;
+          const executable = version.executable
+            ? `${path}/${version.executable}`
+            : await this.findExecutable(path);
+          if (!executable || !(await this.api.exists(executable))) continue;
+          customInstalled.push({
+            id: engine.id,
+            version: version.version,
+            installId: version.installId,
+            custom: true,
+            path,
+            originalVersion: version.version,
+          });
+        }
+      }
+      return [...installed, ...customInstalled];
     } catch (error) {
       return [];
     }
+  }
+  async refreshCustomEngineIcons(installedEngines = []) {
+    let changed = false;
+    for (const engine of this.customEngines.getAll()) {
+      if (engine.icon && engine.icon !== "exe.png") continue;
+      const install = installedEngines.find(
+        (item) => item.custom && item.id === engine.id,
+      );
+      const version = engine.versions.find(
+        (item) => item.version === install?.version,
+      );
+      const executable = version?.executable
+        ? `${install?.path}/${version.executable}`
+        : install?.path
+          ? await this.findExecutable(install.path)
+          : "";
+      if (!executable) continue;
+      const icon = await this.executables.getIconDataUrl(executable);
+      if (!icon) continue;
+      engine.icon = icon;
+      changed = true;
+    }
+    if (changed) await this.customEngines.save();
   }
   async injectModIntoEngine(modId, engineId, version) {
     return this.injection.injectOne(modId, engineId, version);
@@ -1776,7 +2257,11 @@ var _FileSystemService = class _FileSystemService {
     const mods = await this.mods.getAll();
     const mod = mods.find((item) => sameId(item.id, modId));
     if (!mod) return null;
-    if (type === "addon" && mod.engineId !== "codename") {
+    if (
+      type === "addon" &&
+      mod.engineId !== "codename" &&
+      !this.isCustomEngine(mod.engineId)
+    ) {
       throw new Error("Addons are only available for Codename Engine mods");
     }
     if (type === "dependency") return this.moveModToDependencies(modId);

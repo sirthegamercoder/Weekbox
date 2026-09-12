@@ -13,6 +13,7 @@ import {
   activateCheckoutDialog,
   deactivateCheckoutDialog,
 } from "../home/modal/dialogFocus.js";
+import { customEngineModal } from "../engine-manager/customEngineModal.js";
 
 function setupTagEditor({ overlay, mod, readOnly }) {
   const tagInput = overlay.querySelector(".mod-settings-tag-input");
@@ -331,6 +332,17 @@ export const modSettingsModal = {
         } catch (error) {
           status.textContent = t("modSettings.defaultsFailed");
         }
+      });
+    overlay
+      .querySelector(".mod-settings-convert-engine")
+      ?.addEventListener("click", () => {
+        const folderName = mod.folderName || sanitizePathSegment(mod.name);
+        if (!folderName) return;
+        void customEngineModal.open({
+          sourcePath: `${FS.modsPath}/${folderName}`,
+          allowLibrarySource: true,
+          onImported: () => onSaved?.(),
+        });
       });
     overlay
       .querySelector(".mod-settings-move-to-mods")

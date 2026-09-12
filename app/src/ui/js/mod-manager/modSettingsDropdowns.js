@@ -1,11 +1,14 @@
-import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { setupDropdown } from "../../utils/components/dropdown.component.js";
 import { escapeHtml } from "./modSettingsTemplates.js";
 import { getEngineLabel, t } from "../i18n/index.js";
-import { getEngineVersionOrder } from "../../../backend/config/engine-preferences.js";
+import {
+  getEngineVersionName,
+  getEngineVersionOrder,
+} from "../../../backend/config/engine-preferences.js";
 
 export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
-  const assignableEngines = Object.entries(ENGINE_DETAILS).filter(
+  const assignableEngines = Object.entries(FS.getAllEngineDetails()).filter(
     ([id]) => id !== "executable",
   );
   const engineContainer = overlay.querySelector(".mod-settings-engine");
@@ -30,6 +33,8 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
     ["mod", "Mod", "fa-layer-group"],
     ...(engineSelect.value === "codename" ||
     mod.engineId === "codename" ||
+    FS.isCustomEngine(engineSelect.value) ||
+    FS.isCustomEngine(mod.engineId) ||
     mod.kind === "addon"
       ? [["addon", "Addon", "fa-cubes"]]
       : []),
@@ -98,6 +103,10 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
       return;
 
     const selectedEngineId = engineSelect.value;
+    const getVersionLabel = (version) => {
+      const name = getEngineVersionName(selectedEngineId, version, version);
+      return name === version ? version : `${name} (${version})`;
+    };
     if (!selectedEngineId || selectedEngineId === "executable") {
       updateVersionVisibility(false);
       versionSelect.value = "";
@@ -137,25 +146,26 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
       `<option value="">${t("import.anyVersion")}</option>`,
       ...versions.map(
         (version) =>
-          `<option value="${escapeHtml(version)}" ${version === validSelectedVersion ? "selected" : ""}>${escapeHtml(version)}</option>`,
+          `<option value="${escapeHtml(version)}" ${version === validSelectedVersion ? "selected" : ""}>${escapeHtml(getVersionLabel(version))}</option>`,
       ),
     ].join("");
     versionMenu.innerHTML = [
       `<button type="button" data-version="" class="${!validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${!validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${t("import.anyVersion")}</button>`,
       ...versions.map(
         (version) =>
-          `<button type="button" data-version="${escapeHtml(version)}" class="${version === validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${version === validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${escapeHtml(version)}</button>`,
+          `<button type="button" data-version="${escapeHtml(version)}" class="${version === validSelectedVersion ? "selected" : ""}" role="option" aria-selected="${version === validSelectedVersion}"><i class="fa-solid fa-code-branch" aria-hidden="true"></i>${escapeHtml(getVersionLabel(version))}</button>`,
       ),
     ].join("");
-    versionSelected.textContent =
-      validSelectedVersion || t("import.anyVersion");
+    versionSelected.textContent = validSelectedVersion
+      ? getVersionLabel(validSelectedVersion)
+      : t("import.anyVersion");
     versionSelect.value = validSelectedVersion;
   };
 
   const initialEngineId =
     mod.engineId &&
     mod.engineId !== "executable" &&
-    ENGINE_DETAILS[mod.engineId]
+    FS.getEngineDetails(mod.engineId)
       ? mod.engineId
       : "";
 
@@ -174,19 +184,21 @@ export function setupModSettingsDropdowns(overlay, mod, installedEngines) {
     const isCustomEngine =
       selectedEngineId &&
       selectedEngineId !== "executable" &&
-      ENGINE_DETAILS[selectedEngineId];
-    const engine = isCustomEngine ? ENGINE_DETAILS[selectedEngineId] : null;
+      FS.getEngineDetails(selectedEngineId);
+    const engine = isCustomEngine
+      ? FS.getEngineDetails(selectedEngineId)
+      : null;
     engineSelected.textContent = engine
       ? getEngineLabel(selectedEngineId, engine.name)
       : defaultLabel;
     engineIcon.innerHTML = engine
-      ? `<img src="assets/icons/${engine.icon}" alt="">`
+      ? `<img src="${FS.getEngineIconSource(selectedEngineId)}" alt="">`
       : defaultIconHtml;
     engineMenu.innerHTML = [
       `<button type="button" data-engine-id="" class="${!selectedEngineId ? "selected" : ""}" role="option" aria-selected="${!selectedEngineId}">${defaultIconHtml}${defaultLabel}</button>`,
       ...assignableEngines.map(
         ([id, details]) =>
-          `<button type="button" data-engine-id="${id}" class="${id === selectedEngineId ? "selected" : ""}" role="option" aria-selected="${id === selectedEngineId}"><img src="assets/icons/${details.icon}" alt="">${escapeHtml(getEngineLabel(id, details.name))}</button>`,
+          `<button type="button" data-engine-id="${id}" class="${id === selectedEngineId ? "selected" : ""}" role="option" aria-selected="${id === selectedEngineId}"><img src="${FS.getEngineIconSource(id)}" alt="">${escapeHtml(getEngineLabel(id, details.name))}</button>`,
       ),
     ].join("");
   };

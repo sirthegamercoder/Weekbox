@@ -1,6 +1,15 @@
 import { toastSystem } from "../toasts/toastSystem.js";
 import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { t } from "../i18n/index.js";
+
+function getIconSource(icon, engineId = null) {
+  if (engineId) return FS.getEngineIconSource(engineId);
+  const source = String(icon || "exe.png");
+  return /^(?:data|blob|https?):/i.test(source)
+    ? source
+    : `assets/icons/${source}`;
+}
 
 function getToastId(engineId) {
   return `engine-update-toast-${engineId}`;
@@ -11,7 +20,7 @@ export const engineUpdateToast = {
     toastSystem.show(getToastId(engineId), {
       title: name,
       message: t("engineUpdates.preparing"),
-      mediaHtml: `<img src="assets/icons/${ENGINE_DETAILS[engineId]?.icon || "exe.png"}" alt="" />`,
+      mediaHtml: `<img src="${getIconSource(ENGINE_DETAILS[engineId]?.icon, engineId)}" alt="" />`,
       showPercent: true,
     });
   },
@@ -50,7 +59,7 @@ export const engineUpdateToast = {
     toastSystem.show(id, {
       title: t("engineUpdates.availableTitle", { name }),
       message: t("engineUpdates.clickToReview"),
-      mediaHtml: `<img src="assets/icons/${icon}" alt="" />`,
+      mediaHtml: `<img src="${getIconSource(icon, engineId)}" alt="" />`,
       badgeHtml: '<i class="fa-solid fa-exclamation" aria-hidden="true"></i>',
       showProgress: false,
       duration: 10000,
@@ -78,7 +87,7 @@ export const engineUpdateToast = {
       message: engineId
         ? t("engineUpdates.installToLaunch", { name })
         : t("engineUpdates.assignInModManager"),
-      mediaHtml: `<img src="assets/icons/${icon || "exe.png"}" alt="" />`,
+      mediaHtml: `<img src="${getIconSource(icon, engineId)}" alt="" />`,
       badgeHtml: '<i class="fa-solid fa-xmark" aria-hidden="true"></i>',
       showProgress: false,
     });

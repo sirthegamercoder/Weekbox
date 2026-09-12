@@ -80,3 +80,24 @@ export function setPreferredEngineVersion(engineId, version) {
   };
   appSettings.set("engineVersionPreferences", JSON.stringify(preferences));
 }
+
+export function getEngineVersionName(engineId, version, fallback) {
+  const preferences = readJsonSetting("engineVersionPreferences", {});
+  const name = preferences[engineId]?.names?.[version];
+  return typeof name === "string" && name.trim() ? name.trim() : fallback;
+}
+
+export function setEngineVersionName(engineId, version, name, fallback) {
+  const preferences = readJsonSetting("engineVersionPreferences", {});
+  const enginePreferences = preferences[engineId] || {};
+  const names = { ...(enginePreferences.names || {}) };
+  const trimmedName = String(name || "")
+    .trim()
+    .slice(0, 80);
+  if (!trimmedName || trimmedName === fallback) delete names[version];
+  else names[version] = trimmedName;
+  if (Object.keys(names).length) enginePreferences.names = names;
+  else delete enginePreferences.names;
+  preferences[engineId] = enginePreferences;
+  appSettings.set("engineVersionPreferences", JSON.stringify(preferences));
+}

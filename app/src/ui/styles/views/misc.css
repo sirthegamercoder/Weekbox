@@ -192,6 +192,23 @@ body.window-unfocused::after {
   font-size: 1.25rem;
 }
 
+.browse-category-notice {
+  display: flex;
+  margin: calc(var(--spacing-md) * -0.25) 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 190 92 / 28%);
+  border-radius: var(--border-radius);
+  background: rgb(255 190 92 / 8%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.browse-category-notice[hidden] {
+  display: none;
+}
+
 .mod-card {
   background-color: transparent;
   border: none;
@@ -213,6 +230,8 @@ body.window-unfocused::after {
   --card-image-height: 140px;
   content-visibility: auto;
   contain-intrinsic-size: 260px 220px;
+  animation: card-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 45ms);
 }
 
 .mod-card-bg {
@@ -1643,7 +1662,9 @@ body.window-unfocused::after {
 .mod-settings-cancel,
 .mod-settings-save,
 .mod-settings-reset,
-.mod-settings-move-to-mods {
+.mod-settings-move-to-mods,
+.mod-settings-convert-engine {
+  box-sizing: border-box;
   min-height: 34px;
   padding: 0 11px;
   border: 1px solid var(--border-color);
@@ -1658,7 +1679,8 @@ body.window-unfocused::after {
 .mod-settings-open-folder:hover,
 .mod-settings-cancel:hover,
 .mod-settings-reset:hover:not(:disabled),
-.mod-settings-move-to-mods:hover:not(:disabled) {
+.mod-settings-move-to-mods:hover:not(:disabled),
+.mod-settings-convert-engine:hover:not(:disabled) {
   border-color: var(--text-muted);
   color: var(--text-main);
 }
@@ -1946,9 +1968,15 @@ body.window-unfocused::after {
 
 .mod-settings-save:disabled,
 .mod-settings-reset:disabled,
-.mod-settings-move-to-mods:disabled {
+.mod-settings-move-to-mods:disabled,
+.mod-settings-convert-engine:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.mod-settings-convert-engine {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @media (max-width: 500px) {
@@ -1967,7 +1995,8 @@ body.window-unfocused::after {
     grid-template-columns: 1fr;
   }
 
-  .mod-settings-footer .mod-settings-reset {
+  .mod-settings-footer .mod-settings-reset,
+  .mod-settings-footer .mod-settings-convert-engine {
     width: 100%;
   }
 }
