@@ -146,6 +146,10 @@
   color: var(--text-main);
 }
 
+.config-tab-btn.active {
+  box-shadow: inset 3px 0 var(--primary);
+}
+
 /* MAIN CONTENT */
 .config-main {
   flex: 1;
@@ -204,7 +208,12 @@
 }
 
 .config-tab-content {
-  animation: fade-in 0.3s ease;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.config-tab-content.active {
+  animation: config-tab-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .setting-language-control {

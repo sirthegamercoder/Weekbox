@@ -230,6 +230,8 @@ body.window-unfocused::after {
   --card-image-height: 140px;
   content-visibility: auto;
   contain-intrinsic-size: 260px 220px;
+  animation: card-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 45ms);
 }
 
 .mod-card-bg {

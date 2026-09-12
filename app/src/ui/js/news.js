@@ -307,10 +307,11 @@ export const newsView = {
       this.grid.appendChild(empty);
       return;
     }
-    for (const post of posts) {
+    for (const [index, post] of posts.entries()) {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "news-view__card";
+      card.style.setProperty("--card-index", String(Math.min(index, 7)));
       card.setAttribute(
         "aria-label",
         t("news.openArticle", { title: post.title }),

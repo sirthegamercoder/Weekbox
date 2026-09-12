@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Softened page, card, engine, modal, and sidebar transitions.
+
 ## [2.3.0] - 2026-09-11
 
 ### Added

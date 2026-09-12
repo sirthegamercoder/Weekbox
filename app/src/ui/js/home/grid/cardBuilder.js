@@ -22,6 +22,10 @@ export function createCard(mod, index) {
   card.type = "button";
   card.className = "mod-card";
   card.dataset.modId = String(mod.id);
+  card.style.setProperty(
+    "--card-index",
+    String(Math.min(Number(index) || 0, 7)),
+  );
   if (isPeo) card.classList.add("mod-card--no-author");
 
   const cardBg = document.createElement("div");

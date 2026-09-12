@@ -649,7 +649,7 @@
 
 .engine-manager-body--switching {
   opacity: 0;
-  transform: scale(0.985);
+  transform: translateY(6px) scale(0.985);
 }
 
 .engine-manager-body--switched {
@@ -659,7 +659,7 @@
 @keyframes engine-manager-panel-enter {
   from {
     opacity: 0;
-    transform: scale(0.985);
+    transform: translateY(6px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -704,12 +704,14 @@
 
   /* Animaciones de estado inactivo a activo */
   transition:
-    transform 0.5s cubic-bezier(0.25, 1, 0.5, 1),
-    opacity 0.5s ease,
-    filter 0.5s ease;
-  opacity: 0.35;
-  transform: scale(0.8);
-  filter: grayscale(80%);
+    transform 360ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 360ms cubic-bezier(0.2, 0, 0, 1),
+    filter 360ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 240ms ease,
+    background-color 240ms ease;
+  opacity: 0.52;
+  transform: scale(0.88);
+  filter: grayscale(45%);
 
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -723,6 +725,7 @@
   transform: scale(1);
   filter: grayscale(0%);
   border-color: rgba(255, 255, 255, 0.15);
+  background-color: color-mix(in srgb, var(--bg-panel) 38%, transparent);
 }
 
 /* Permitir clic en columnas inactivas pero deshabilitar interacciones internas */

@@ -205,7 +205,10 @@ export const configModal = {
         const targetContent = document.getElementById(`config-${targetId}`);
         if (targetContent) {
           targetContent.style.display = "block";
-          targetContent.classList.add("active");
+          requestAnimationFrame(() => {
+            if (targetContent.isConnected)
+              targetContent.classList.add("active");
+          });
         }
 
         const titleElement = document.getElementById("config-section-title");

@@ -320,7 +320,7 @@ export const cardRenderer = {
       onProcessExit,
     );
 
-    for (const mod of modsToRender) {
+    for (const [index, mod] of modsToRender.entries()) {
       const context = createModManagerCard(
         mod,
         standaloneModIds,
@@ -338,6 +338,7 @@ export const cardRenderer = {
         refreshChangeButtons,
       });
       const { card } = context;
+      card.style.setProperty("--card-index", String(Math.min(index, 7)));
       fragment.appendChild(card);
     }
 

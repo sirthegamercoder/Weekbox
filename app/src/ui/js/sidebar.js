@@ -158,7 +158,6 @@ export const sidebar = {
       const label = t(collapsed ? "sidebar.expand" : "sidebar.collapse");
       this.collapseBtn.setAttribute("aria-label", label);
       this.collapseBtn.title = label;
-      this.collapseBtn.innerHTML = `<i class="fa-solid fa-angles-${collapsed ? "right" : "left"}" aria-hidden="true"></i>`;
     }
     this.updateCollapsedTooltips();
     try {

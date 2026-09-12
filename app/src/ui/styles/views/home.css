@@ -69,8 +69,13 @@
   justify-content: center !important;
   align-items: center !important;
 
-  background-color: rgba(10, 10, 10, 0.65) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--surface-container-lowest) 82%,
+    transparent
+  ) !important;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--outline-variant) 48%, transparent) !important;
 
   transition:
     height 0.35s ease,
@@ -82,8 +87,12 @@
 .home-container.scrolled #home-nav.home-nav {
   height: 70px !important;
   padding: 10px var(--spacing-xl) !important;
-  background-color: rgba(10, 10, 10, 0.85) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  background-color: color-mix(
+    in srgb,
+    var(--surface-container-lowest) 94%,
+    transparent
+  ) !important;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 34%) !important;
 }
 
 .search-container {
@@ -117,8 +126,8 @@
 
 #mod-search-input.search-input {
   width: 100% !important;
-  background-color: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: var(--surface-control) !important;
+  border: 1px solid var(--outline-variant) !important;
   color: var(--text-main) !important;
   padding: 14px 20px 14px 48px !important;
   border-radius: 30px !important;
@@ -161,16 +170,16 @@
 }
 
 #mod-search-input.search-input:hover {
-  background-color: rgba(255, 255, 255, 0.07) !important;
-  border-color: rgba(255, 255, 255, 0.15) !important;
+  background-color: var(--surface-control-hover) !important;
+  border-color: var(--outline) !important;
 }
 
 #mod-search-input.search-input:focus {
-  background-color: rgba(15, 15, 15, 0.95) !important;
+  background-color: var(--surface-container-lowest) !important;
   border-color: var(--text-main) !important;
   box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.08),
-    0 15px 35px rgba(0, 0, 0, 0.6) !important;
+    0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent),
+    0 15px 35px rgb(0 0 0 / 48%) !important;
   transform: translateY(-2px) !important;
 }
 
