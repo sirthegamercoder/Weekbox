@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Softened page, card, engine, modal, and sidebar transitions.
-
 ## [2.3.0] - 2026-09-11
 
 ### Added
@@ -27,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Softened page, card, engine, modal, and sidebar transitions.
 - Built-in and custom engines now use the same manager and version picker.
 - Engine downloads now stage a replacement before changing the installed copy.
 - Legacy category warnings appear only when that category is selected.
