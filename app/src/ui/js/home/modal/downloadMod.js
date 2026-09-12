@@ -150,21 +150,6 @@ async function prepareInstalledFolder(
   };
 }
 
-function markInstallModalComplete() {
-  const modalBtn = document.getElementById("modal-download-btn");
-  if (
-    modalBtn &&
-    document.getElementById("mod-modal")?.classList.contains("show")
-  ) {
-    setModalButtonState(
-      modalBtn,
-      "fa-solid fa-check",
-      t("modModal.alreadyInstalled"),
-      true,
-    );
-  }
-}
-
 async function finalizeInstall(
   service,
   {
@@ -193,8 +178,11 @@ async function finalizeInstall(
         engineVersion: null,
       }
     : installMetadata;
-  const resolvedEngineId =
-    isExecutable ? "executable" : engineId === "executable" ? null : engineId;
+  const resolvedEngineId = isExecutable
+    ? "executable"
+    : engineId === "executable"
+      ? null
+      : engineId;
   await FS.api.remove(downloadMarkerPath);
   await FS.api.write(`${targetModFolder}/mod_url.txt`, downloadUrl);
   await FS.saveInstalledMod(modId, modName, {
@@ -233,10 +221,9 @@ async function finalizeInstall(
   service.reportInstallProgress(modId, modName, "complete", 100);
   document.dispatchEvent(new CustomEvent("mods-updated"));
   toastDownloadMod.success(modId);
-  markInstallModalComplete();
   await FS.api.remove(tempFilePath);
   service.activeTasks.delete(modId);
-  return true;
+  return modId;
 }
 
 export const downloadMod = {
@@ -412,32 +399,17 @@ export const downloadMod = {
     } catch (error) {}
   },
 
-  /**
-   * @fix 2026-08-05T03:47:55.251Z - Fix "This mod is already installed" unexpected error popup when mod is already installed
-   */
-  async install(modId, modName, downloadUrl, engineId = null, metadata = {}) {
+  async install(
+    sourceModId,
+    modName,
+    downloadUrl,
+    engineId = null,
+    metadata = {},
+  ) {
     if (!FS.isInitialized) await FS.init();
     FS.assertStorageUnlocked();
 
-    if (this.activeTasks.has(modId)) return false;
-
-    if (await FS.isModInstalled(modId)) {
-      this.reportInstallProgress(modId, modName, t("downloads.installed"), 100);
-      toastDownloadMod.success(modId);
-      const modalBtn = document.getElementById("modal-download-btn");
-      if (
-        modalBtn &&
-        document.getElementById("mod-modal")?.classList.contains("show")
-      ) {
-        setModalButtonState(
-          modalBtn,
-          "fa-solid fa-check",
-          t("modModal.alreadyInstalled"),
-          true,
-        );
-      }
-      return true;
-    }
+    const modId = `${sourceModId}--${crypto.randomUUID()}`;
 
     const modsBasePath = FS.modsPath;
     const taskKey = String(modId).replace(/[^a-z0-9_-]/gi, "_");
@@ -462,7 +434,7 @@ export const downloadMod = {
     const { toastThumbnail, sourceType, fileSize, ...installMetadata } =
       metadata;
     const coverUrlPromise = this.fetchModCoverUrl(
-      modId,
+      sourceModId,
       sourceType,
       toastThumbnail,
     );

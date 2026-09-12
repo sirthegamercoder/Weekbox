@@ -1,16 +1,8 @@
 {
   "common.separator": "•",
-  "common.mods": "Mods",
-  "nav.modManager": "Mods",
   "home.psychEngine": "Psych Engine",
   "home.codenameEngine": "Codename Engine",
   "home.pSlice": "P-Slice",
   "home.fpsPlus": "FPS Plus",
-  "home.psychOnline": "Psych Online",
-  "common.cancel": "Cancel",
-  "engineManager.renameVersion": "Rename installed version",
-  "engineManager.versionName": "Name",
-  "tray.showWeekBox": "Show WeekBox",
-  "tray.quitWeekBox": "Quit WeekBox",
-  "modModal.fileSizePlaceholder": "-- MB"
+  "home.psychOnline": "Psych Online"
 }

@@ -1,4 +1,5 @@
 import { ENGINE_DETAILS } from "../../../../backend/config/engines.config.js";
+import { FS } from "../../../../backend/services/filesystem.js";
 import { errorHandler } from "../../errors/errorHandler.js";
 import {
   activateCheckoutDialog,
@@ -223,13 +224,14 @@ function showModData(data, isInstalled, onDownload) {
 
   const gameBananaLink = document.getElementById("modal-gamebanana-link");
   if (gameBananaLink) updateModalGameBananaLink(gameBananaLink, data);
-  const engine = ENGINE_DETAILS[data.engineId];
+  const engine =
+    FS.getEngineDetails(data.engineId) || ENGINE_DETAILS[data.engineId];
   const engineBadge = document.getElementById("modal-engine-badge");
   const engineIcon = document.getElementById("modal-engine-icon");
   const engineName = document.getElementById("modal-engine-name");
   if (engine) {
     if (engineIcon) {
-      engineIcon.src = `assets/icons/${engine.icon}`;
+      engineIcon.src = FS.getEngineIconSource(data.engineId);
       engineIcon.alt = "";
     }
     if (engineName)
@@ -254,15 +256,7 @@ function updateDownloadStatus(data, isInstalled, onDownload) {
   }
   const button = document.getElementById("modal-download-btn");
   if (!button) return;
-  if (isInstalled) {
-    button.onclick = null;
-    setModalDownloadButton(
-      button,
-      "fa-solid fa-check",
-      t("modModal.alreadyInstalled"),
-      true,
-    );
-  } else if (data.loadingDownloads) {
+  if (data.loadingDownloads) {
     button.onclick = null;
     setModalDownloadButton(
       button,
@@ -282,11 +276,21 @@ function updateDownloadStatus(data, isInstalled, onDownload) {
       setModalDownloadButton(
         button,
         "fa-solid fa-download",
-        data.downloadButtonLabel || t("common.download"),
+        isInstalled
+          ? t("modModal.downloadAnotherCopy")
+          : data.downloadButtonLabel || t("common.download"),
         false,
       );
     }
     button.onclick = onDownload;
+  } else if (isInstalled) {
+    button.onclick = null;
+    setModalDownloadButton(
+      button,
+      "fa-solid fa-check",
+      t("modModal.alreadyInstalled"),
+      true,
+    );
   } else {
     const sourceUrl =
       data.source === "peo" ? data.sourceUrl : data.gameBananaUrl;

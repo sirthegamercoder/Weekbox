@@ -1,4 +1,5 @@
 import { gameBananaApi } from "../../../backend/providers/gamebanana/gamebanana.provider.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { modModal } from "./modal/index.js";
 import { getEngineLabel, getEngineLabelKey, t } from "../i18n/index.js";
 
@@ -83,7 +84,7 @@ function populateCarouselEngine(slide, mod) {
   }
   if (engineBadge) engineBadge.title = engineName;
   if (engineIcon && mod.engine?.icon)
-    engineIcon.src = `assets/icons/${mod.engine.icon}`;
+    engineIcon.src = FS.getEngineIconSource(mod.engineId);
   if (engineBadge && !engineName && !mod.engine?.icon)
     engineBadge.hidden = true;
 }

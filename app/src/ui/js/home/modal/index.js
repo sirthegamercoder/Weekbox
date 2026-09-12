@@ -65,7 +65,9 @@ const modModal = {
     if (!data) {
       const errTitle = document.getElementById("modal-title");
       if (errTitle) errTitle.textContent = t("modModal.errorLoadingMod");
-      document.getElementById("modal-image-loader")?.style.setProperty("display", "none");
+      document
+        .getElementById("modal-image-loader")
+        ?.style.setProperty("display", "none");
       const downloadButton = document.getElementById("modal-download-btn");
       if (downloadButton) {
         downloadButton.disabled = true;
@@ -106,7 +108,9 @@ const modModal = {
     if (!data) {
       const errTitle = document.getElementById("modal-title");
       if (errTitle) errTitle.textContent = t("modModal.errorLoadingTool");
-      document.getElementById("modal-image-loader")?.style.setProperty("display", "none");
+      document
+        .getElementById("modal-image-loader")
+        ?.style.setProperty("display", "none");
       return;
     }
     const isInstalled = await FS.isModInstalled(data.id);
@@ -169,7 +173,7 @@ const modModal = {
     if (!installedMod) return;
     await Promise.all(
       selected.map((dependency) =>
-        FS.addDependencyConsumer(dependency.dependencyId, data.id),
+        FS.addDependencyConsumer(dependency.dependencyId, installedMod),
       ),
     );
   },

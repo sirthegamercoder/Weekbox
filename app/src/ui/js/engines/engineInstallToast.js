@@ -1,5 +1,5 @@
 import { toastDownloadMod } from "../home/modal/toastDownloadMod.js";
-import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { t } from "../i18n/index.js";
 
 function getToastId(engineId, version) {
@@ -13,7 +13,7 @@ export const engineInstallToast = {
     const toastId = getToastId(engineId, version);
     if (!toastDownloadMod.toasts.has(toastId)) {
       toastDownloadMod.show(toastId, `${name} · ${version}`, onCancel, {
-        iconHtml: `<img src="assets/icons/${ENGINE_DETAILS[engineId]?.icon || "exe.png"}" alt="" />`,
+        iconHtml: `<img src="${FS.getEngineIconSource(engineId)}" alt="" />`,
       });
     }
     return toastId;

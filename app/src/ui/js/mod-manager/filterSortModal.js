@@ -1,5 +1,5 @@
 import { setupDropdown } from "../../utils/components/dropdown.component.js";
-import { ENGINE_DETAILS } from "../../../backend/config/engines.config.js";
+import { FS } from "../../../backend/services/filesystem.js";
 import { getEngineLabel, t } from "../i18n/index.js";
 import {
   activateCheckoutDialog,
@@ -30,17 +30,26 @@ function createMultiDropdown(label, options, selectedFilters, emptyLabel) {
   menu.hidden = true;
 
   const sync = () => {
-    const selected = options.filter(([value]) =>
-      selectedFilters.include.has(value) || selectedFilters.exclude.has(value),
+    const selected = options.filter(
+      ([value]) =>
+        selectedFilters.include.has(value) ||
+        selectedFilters.exclude.has(value),
     );
     trigger.innerHTML = `<i class="fa-solid fa-filter" aria-hidden="true"></i><span>${label}${selected.length ? ` (${selected.length})` : ""}</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i>`;
     menu.querySelectorAll("[data-value]").forEach((option) => {
-      option.classList.toggle("is-included", selectedFilters.include.has(option.dataset.value));
-      option.classList.toggle("is-excluded", selectedFilters.exclude.has(option.dataset.value));
+      option.classList.toggle(
+        "is-included",
+        selectedFilters.include.has(option.dataset.value),
+      );
+      option.classList.toggle(
+        "is-excluded",
+        selectedFilters.exclude.has(option.dataset.value),
+      );
     });
   };
 
-  if (!options.length) menu.innerHTML = `<span class="mod-manager-filter-empty">${emptyLabel}</span>`;
+  if (!options.length)
+    menu.innerHTML = `<span class="mod-manager-filter-empty">${emptyLabel}</span>`;
   options.forEach(([value, labelText, iconClass, iconPath]) => {
     const option = document.createElement("div");
     option.className = "custom-option mod-manager-filter-option";
@@ -51,7 +60,8 @@ function createMultiDropdown(label, options, selectedFilters, emptyLabel) {
       if (!button) return;
       const target = button.dataset.action;
       const other = target === "include" ? "exclude" : "include";
-      if (selectedFilters[target].has(value)) selectedFilters[target].delete(value);
+      if (selectedFilters[target].has(value))
+        selectedFilters[target].delete(value);
       else {
         selectedFilters[target].add(value);
         selectedFilters[other].delete(value);
@@ -80,9 +90,14 @@ function createSortDropdown(sort, onSelect) {
 
   const sync = (value = selected) => {
     selected = value;
-    const option = SORT_OPTIONS.find(([id]) => id === selected) || SORT_OPTIONS[0];
+    const option =
+      SORT_OPTIONS.find(([id]) => id === selected) || SORT_OPTIONS[0];
     trigger.innerHTML = `<i class="fa-solid ${option[2]}" aria-hidden="true"></i><span>${t("modManager.sortBy")}: ${t(option[1])}</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i>`;
-    menu.querySelectorAll("button").forEach((button) => button.classList.toggle("selected", button.dataset.value === selected));
+    menu
+      .querySelectorAll("button")
+      .forEach((button) =>
+        button.classList.toggle("selected", button.dataset.value === selected),
+      );
   };
   SORT_OPTIONS.forEach(([value, label, icon]) => {
     const option = document.createElement("button");
@@ -132,19 +147,57 @@ export function openFilterSortModal({
   let selectedSort = sort;
   const typeOptions = [
     ...(hasMods ? [["kind:mod", "common.mods", "fa-layer-group"]] : []),
-    ...(hasDependencies ? [["kind:dependency", "modManager.dependencies", "fa-puzzle-piece"]] : []),
+    ...(hasDependencies
+      ? [["kind:dependency", "modManager.dependencies", "fa-puzzle-piece"]]
+      : []),
     ...(hasAddons ? [["kind:addon", "Addons", "fa-cubes"]] : []),
   ];
   const engineOptions = [
-    ...(hasExecutables ? [["executable", "home.executables", "fa-file-code", "assets/icons/exe.png"]] : []),
-    ...(hasUnassigned ? [["unassigned", "import.unassigned", "fa-circle-question"]] : []),
-    ...engineIds.map((id) => [`engine:${id}`, getEngineLabel(id, ENGINE_DETAILS[id]?.name || id), "fa-microchip", ENGINE_DETAILS[id] ? `assets/icons/${ENGINE_DETAILS[id].icon}` : null]),
+    ...(hasExecutables
+      ? [
+          [
+            "executable",
+            "home.executables",
+            "fa-file-code",
+            "assets/icons/exe.png",
+          ],
+        ]
+      : []),
+    ...(hasUnassigned
+      ? [["unassigned", "import.unassigned", "fa-circle-question"]]
+      : []),
+    ...engineIds.map((id) => {
+      const details = FS.getEngineDetails(id);
+      return [
+        `engine:${id}`,
+        getEngineLabel(id, details?.name || id),
+        "fa-microchip",
+        details ? FS.getEngineIconSource(id) : null,
+      ];
+    }),
   ];
   const controls = panel.querySelector(".mod-manager-filter-dropdowns");
-  const typeDropdown = createMultiDropdown(t("modManager.type"), typeOptions, selectedFilters, "No types available");
-  const engineDropdown = createMultiDropdown(t("nav.engineManager"), engineOptions, selectedFilters, "No engines available");
-  const sortDropdown = createSortDropdown(selectedSort, (value) => (selectedSort = value));
-  controls.append(typeDropdown.dropdown, engineDropdown.dropdown, sortDropdown.dropdown);
+  const typeDropdown = createMultiDropdown(
+    t("modManager.type"),
+    typeOptions,
+    selectedFilters,
+    "No types available",
+  );
+  const engineDropdown = createMultiDropdown(
+    t("nav.engineManager"),
+    engineOptions,
+    selectedFilters,
+    "No engines available",
+  );
+  const sortDropdown = createSortDropdown(
+    selectedSort,
+    (value) => (selectedSort = value),
+  );
+  controls.append(
+    typeDropdown.dropdown,
+    engineDropdown.dropdown,
+    sortDropdown.dropdown,
+  );
 
   const close = () => {
     deactivateCheckoutDialog(overlay);
@@ -154,18 +207,28 @@ export function openFilterSortModal({
     overlay.classList.remove("show");
     setTimeout(() => overlay.remove(), 260);
   };
-  panel.querySelector(".mod-manager-filter-dismiss").addEventListener("click", close);
-  panel.querySelector(".mod-manager-filter-reset").addEventListener("click", () => {
-    selectedFilters.include.clear();
-    selectedFilters.exclude.clear();
-    selectedSort = "added-desc";
-    typeDropdown.sync();
-    engineDropdown.sync();
-    sortDropdown.sync(selectedSort);
-  });
+  panel
+    .querySelector(".mod-manager-filter-dismiss")
+    .addEventListener("click", close);
+  panel
+    .querySelector(".mod-manager-filter-reset")
+    .addEventListener("click", () => {
+      selectedFilters.include.clear();
+      selectedFilters.exclude.clear();
+      selectedSort = "added-desc";
+      typeDropdown.sync();
+      engineDropdown.sync();
+      sortDropdown.sync(selectedSort);
+    });
   panel.addEventListener("submit", (event) => {
     event.preventDefault();
-    onApply({ filters: { include: [...selectedFilters.include], exclude: [...selectedFilters.exclude] }, sort: selectedSort });
+    onApply({
+      filters: {
+        include: [...selectedFilters.include],
+        exclude: [...selectedFilters.exclude],
+      },
+      sort: selectedSort,
+    });
     close();
   });
   overlay.addEventListener("click", (event) => {

@@ -1,5 +1,5 @@
 import { modModal } from "../modal/index.js";
-import { ENGINE_DETAILS } from "../../../../backend/config/engines.config.js";
+import { FS } from "../../../../backend/services/filesystem.js";
 import {
   applyDominantColor,
   hasCachedDominantColor,
@@ -45,7 +45,7 @@ export function createCard(mod, index) {
   imageContainer.appendChild(image);
 
   // Engine / category indicator at top-left
-  const engine = ENGINE_DETAILS[mod.engineId];
+  const engine = FS.getEngineDetails(mod.engineId);
   const engineIndicator = document.createElement("span");
   engineIndicator.className = "grid-engine-indicator";
   const labelKey = engine
@@ -61,7 +61,7 @@ export function createCard(mod, index) {
 
   if (engine?.icon) {
     const engineIcon = document.createElement("img");
-    engineIcon.src = `assets/icons/${engine.icon}`;
+    engineIcon.src = FS.getEngineIconSource(mod.engineId);
     engineIcon.alt = "";
     engineIndicator.appendChild(engineIcon);
   } else if (mod.gameId === 8694) {

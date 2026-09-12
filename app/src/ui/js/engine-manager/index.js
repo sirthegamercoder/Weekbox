@@ -19,6 +19,7 @@ import { downloadEngine } from "../engines/downloadEngine.js";
 import { engineInstallToast } from "../engines/engineInstallToast.js";
 import { rememberInstalledEngineBuild } from "../engines/engineUpdateService.js";
 import { fetchAndRenderReleaseNotes } from "../engines/releaseNotes.js";
+import { customEngineModal } from "./customEngineModal.js";
 import {
   activateCheckoutDialog,
   deactivateCheckoutDialog,
@@ -69,6 +70,120 @@ function normalizeEngineVersions(releases) {
 function getInstalledVersionLabel(engineId, version) {
   const name = getEngineVersionName(engineId, version, version);
   return name === version ? version : `${name} (${version})`;
+}
+
+function getEngineDetails(engineId) {
+  return (
+    FS.getEngineDetails(engineId) ||
+    ENGINE_DETAILS[engineId] || {
+      name: engineId,
+      icon: "exe.png",
+    }
+  );
+}
+
+function setButtonIcon(button, iconClass) {
+  const icon = button.querySelector("i") || document.createElement("i");
+  icon.className = iconClass;
+  if (!icon.parentNode) button.appendChild(icon);
+}
+
+function bindCustomVersionActions({
+  item,
+  engineId,
+  version,
+  displayName,
+  onProcessFinished,
+}) {
+  const launchBtn = item.querySelector(".engine-launch-btn");
+  const importModsBtn = item.querySelector(".engine-import-mods-btn");
+  const updateLaunchButton = () => {
+    const running = FS.isEngineRunning(engineId, version);
+    if (!launchBtn) return;
+    launchBtn.innerHTML = `<i class="fa-solid ${running ? "fa-stop" : "fa-play"}" aria-hidden="true"></i>`;
+    launchBtn.title = t(
+      running
+        ? "engineManager.closeCustomEngine"
+        : "engineManager.launchCustomEngine",
+    );
+    launchBtn.setAttribute("aria-label", launchBtn.title);
+  };
+  updateLaunchButton();
+  launchBtn?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    launchBtn.disabled = true;
+    setButtonIcon(launchBtn, "fa-solid fa-spinner fa-spin");
+    try {
+      if (FS.isEngineRunning(engineId, version)) {
+        await FS.closeEngine(engineId, version, updateLaunchButton);
+      } else {
+        await FS.injectModsIntoEngine(engineId, version);
+        await FS.runEngine(engineId, version, (state) => {
+          updateLaunchButton();
+          if (state === "completed" || state === "error") onProcessFinished();
+        });
+      }
+    } catch (error) {
+      errorHandler.show({
+        error,
+        action: t("engineManager.launchCustomEngine"),
+        item: displayName,
+        version,
+        storagePath: FS.weekboxPath,
+      });
+    } finally {
+      launchBtn.disabled = false;
+      updateLaunchButton();
+    }
+  });
+  importModsBtn?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    importModsBtn.disabled = true;
+    setButtonIcon(importModsBtn, "fa-solid fa-spinner fa-spin");
+    try {
+      const imported = await FS.importCustomEngineMods(engineId, version);
+      engineUpdateToast.info(
+        engineId,
+        displayName,
+        t("engineManager.importedCustomMods", { count: imported.length }),
+      );
+      document.dispatchEvent(new CustomEvent("mods-updated"));
+    } catch (error) {
+      errorHandler.show({
+        error,
+        action: t("engineManager.importCustomMods"),
+        item: displayName,
+        version,
+        storagePath: FS.weekboxPath,
+      });
+    } finally {
+      importModsBtn.disabled = false;
+      setButtonIcon(importModsBtn, "fa-solid fa-box-archive");
+    }
+  });
+}
+
+function configureCustomVersionActions({
+  item,
+  engineId,
+  version,
+  displayName,
+  onProcessFinished,
+}) {
+  const launchBtn = item.querySelector(".engine-launch-btn");
+  const importModsBtn = item.querySelector(".engine-import-mods-btn");
+  if (FS.isCustomEngine(engineId)) {
+    bindCustomVersionActions({
+      item,
+      engineId,
+      version,
+      displayName,
+      onProcessFinished,
+    });
+    return;
+  }
+  launchBtn?.remove();
+  importModsBtn?.remove();
 }
 
 function renameInstalledVersion(engineId, version, onSaved) {
@@ -514,7 +629,7 @@ export const engineManagerModal = {
     header.append(back, title);
     const grid = document.createElement("div");
     grid.className = "engine-download-picker__engine-grid";
-    Object.entries(ENGINE_DETAILS)
+    Object.entries(FS.getAllEngineDetails())
       .filter(([engineId]) => engineId !== "executable")
       .forEach(([engineId, details]) => {
         const button = document.createElement("button");
@@ -522,7 +637,7 @@ export const engineManagerModal = {
         button.className = "engine-download-picker__engine";
         button.dataset.engineId = engineId;
         const icon = document.createElement("img");
-        icon.src = `assets/icons/${details.icon}`;
+        icon.src = FS.getEngineIconSource(engineId);
         icon.alt = "";
         const name = document.createElement("span");
         name.textContent = getEngineLabel(engineId, details.name);
@@ -533,16 +648,26 @@ export const engineManagerModal = {
         );
         grid.appendChild(button);
       });
+    const importButton = document.createElement("button");
+    importButton.type = "button";
+    importButton.className =
+      "engine-download-picker__engine engine-download-picker__engine--import";
+    importButton.innerHTML = `<i class="fa-solid fa-folder-plus" aria-hidden="true"></i><span>${t("engineManager.importCustomEngine")}</span>`;
+    importButton.addEventListener("click", () => {
+      this.isPickerOpen = false;
+      this.pickerRequestId += 1;
+      void customEngineModal.open({
+        onImported: () => this.loadInstalledEngines(),
+      });
+    });
+    grid.appendChild(importButton);
     panel.append(header, grid);
     container.replaceChildren(panel);
   },
   renderDownloadPicker(engineId, versions, returnTo = "chooser") {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return null;
-    const details = ENGINE_DETAILS[engineId] || {
-      name: engineId,
-      icon: "exe.png",
-    };
+    const details = getEngineDetails(engineId);
     const panel = document.createElement("section");
     panel.className = "engine-download-picker";
     const header = document.createElement("header");
@@ -564,7 +689,7 @@ export const engineManagerModal = {
     const heading = document.createElement("div");
     heading.className = "engine-download-picker__identity";
     const icon = document.createElement("img");
-    icon.src = `assets/icons/${details.icon}`;
+    icon.src = FS.getEngineIconSource(engineId);
     icon.alt = "";
     const title = document.createElement("h3");
     title.textContent = getEngineLabel(engineId, details.name);
@@ -728,6 +853,15 @@ export const engineManagerModal = {
   async showDownloadPicker(engineId, returnTo = "chooser") {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return;
+    if (engineId && FS.isCustomEngine(engineId) && !ENGINE_DETAILS[engineId]) {
+      this.isPickerOpen = false;
+      this.pickerRequestId += 1;
+      await customEngineModal.open({
+        engineId,
+        onImported: () => this.loadInstalledEngines(),
+      });
+      return;
+    }
     this.isPickerOpen = true;
     const requestId = ++this.pickerRequestId;
     container.classList.add("engine-manager-body--switching");
@@ -854,15 +988,6 @@ export const engineManagerModal = {
       container.append(viewport, indexContainer);
     }
 
-    const setButtonIcon = (btn, iconClass) => {
-      let icon = btn.querySelector("i");
-      if (!icon) {
-        icon = document.createElement("i");
-        btn.appendChild(icon);
-      }
-      icon.className = iconClass;
-    };
-
     const syncEngineOrder = () => {
       const orderedIds = [
         ...indexContainer.querySelectorAll(".em-index-icon"),
@@ -890,10 +1015,7 @@ export const engineManagerModal = {
 
     // 4. Generar las tarjetas y los iconos del índice
     sortedEngineEntries.forEach(([engineId, versions]) => {
-      const details = ENGINE_DETAILS[engineId] || {
-        name: engineId,
-        icon: "exe.png",
-      };
+      const details = getEngineDetails(engineId);
       const displayName = getEngineLabel(engineId, details.name);
       const card = document.createElement("div");
       card.className = "engine-column";
@@ -911,7 +1033,7 @@ export const engineManagerModal = {
       if (headerTpl) {
         header = headerTpl.content.firstElementChild.cloneNode(true);
         const img = header.querySelector(".engine-col-icon");
-        img.src = `assets/icons/${details.icon}`;
+        img.src = FS.getEngineIconSource(engineId);
         img.alt = displayName;
         const nameSpan = header.querySelector(".engine-col-name");
         nameSpan.textContent = displayName;
@@ -919,7 +1041,7 @@ export const engineManagerModal = {
         header = document.createElement("div");
         header.className = "engine-column-header";
         const img = document.createElement("img");
-        img.src = `assets/icons/${details.icon}`;
+        img.src = FS.getEngineIconSource(engineId);
         img.alt = displayName;
         img.className = "engine-col-icon";
         img.crossOrigin = "anonymous";
@@ -938,6 +1060,59 @@ export const engineManagerModal = {
         engineNameElement.dataset.i18n = engineLabelKey;
       }
       card.appendChild(header);
+
+      if (FS.isCustomEngine(engineId) && !ENGINE_DETAILS[engineId]) {
+        const familyActions = document.createElement("div");
+        familyActions.className = "engine-custom-family-actions";
+        const editFamily = document.createElement("button");
+        editFamily.type = "button";
+        editFamily.className = "engine-custom-family-action";
+        editFamily.title = t("engineManager.editEngineFamily");
+        editFamily.setAttribute("aria-label", editFamily.title);
+        editFamily.innerHTML =
+          '<i class="fa-solid fa-pen" aria-hidden="true"></i>';
+        editFamily.addEventListener("click", (event) => {
+          event.stopPropagation();
+          void customEngineModal.open({
+            mode: "settings",
+            engineId,
+            onSaved: () => this.loadInstalledEngines(),
+          });
+        });
+        const deleteFamily = document.createElement("button");
+        deleteFamily.type = "button";
+        deleteFamily.className =
+          "engine-custom-family-action engine-custom-family-action--delete";
+        deleteFamily.title = t("engineManager.deleteEngineFamily");
+        deleteFamily.setAttribute("aria-label", deleteFamily.title);
+        deleteFamily.innerHTML =
+          '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
+        deleteFamily.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const choice = await Neutralino.os.showMessageBox(
+            t("engineManager.deleteEngineFamily"),
+            t("engineManager.deleteEngineFamilyMessage", { name: displayName }),
+            "YES_NO",
+            "WARNING",
+          );
+          if (choice !== "YES") return;
+          deleteFamily.disabled = true;
+          try {
+            await FS.removeCustomEngine(engineId);
+            await this.loadInstalledEngines();
+          } catch (error) {
+            deleteFamily.disabled = false;
+            errorHandler.show({
+              error,
+              action: t("engineManager.deleteEngineFamily"),
+              item: displayName,
+              storagePath: FS.weekboxPath,
+            });
+          }
+        });
+        familyActions.append(editFamily, deleteFamily);
+        header.appendChild(familyActions);
+      }
 
       // Aplicar color extraído con la nueva utilidad y opciones personalizadas
       const imgEl = header.querySelector(".engine-col-icon");
@@ -1039,6 +1214,18 @@ export const engineManagerModal = {
           const actions = document.createElement("div");
           actions.className = "version-actions";
 
+          const launchBtn = document.createElement("button");
+          launchBtn.className = "engine-action-btn engine-launch-btn";
+          launchBtn.type = "button";
+          launchBtn.innerHTML =
+            '<i class="fa-solid fa-play" aria-hidden="true"></i>';
+
+          const importModsBtn = document.createElement("button");
+          importModsBtn.className = "engine-action-btn engine-import-mods-btn";
+          importModsBtn.type = "button";
+          importModsBtn.innerHTML =
+            '<i class="fa-solid fa-box-archive" aria-hidden="true"></i>';
+
           if (hasUpdate) {
             const updateBtn = document.createElement("button");
             updateBtn.className = "engine-action-btn engine-update-btn";
@@ -1099,9 +1286,24 @@ export const engineManagerModal = {
           preferredIcon.className = "fa-solid fa-star";
           preferredIcon.setAttribute("aria-hidden", "true");
           preferredBtn.appendChild(preferredIcon);
-          actions.append(dirBtn, renameBtn, deleteBtn, preferredBtn);
+          actions.append(
+            launchBtn,
+            importModsBtn,
+            dirBtn,
+            renameBtn,
+            deleteBtn,
+            preferredBtn,
+          );
           item.append(versionText, actions);
         }
+
+        configureCustomVersionActions({
+          item,
+          engineId,
+          version,
+          displayName,
+          onProcessFinished: () => this.loadInstalledEngines(),
+        });
 
         item.classList.toggle("is-preferred", preferredVersion === version);
         const preferredBtn = item.querySelector(".engine-preferred-btn");
@@ -1174,7 +1376,7 @@ export const engineManagerModal = {
           .querySelector(".engine-dir-btn")
           ?.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const targetPath = `${FS.enginesPath}/${engineId}/${version}`;
+            const targetPath = FS.getEnginePath(engineId, version);
             try {
               await Neutralino.os.open(targetPath);
             } catch (e) {}
@@ -1195,7 +1397,7 @@ export const engineManagerModal = {
           if (FS.isEngineRunning(engineId, version)) return;
           deleteBtn.disabled = true;
           setButtonIcon(deleteBtn, "fa-solid fa-spinner fa-spin");
-          const targetPath = `${FS.enginesPath}/${engineId}/${version}`;
+          const targetPath = FS.getEnginePath(engineId, version);
           try {
             if (await FS.api.exists(targetPath)) {
               await FS.api.remove(targetPath);
@@ -1246,7 +1448,7 @@ export const engineManagerModal = {
       indexIcon.dataset.engineId = engineId;
       indexIcon.draggable = false;
       const indexImage = document.createElement("img");
-      indexImage.src = `assets/icons/${details.icon}`;
+      indexImage.src = FS.getEngineIconSource(engineId);
       indexImage.alt = "";
       indexImage.draggable = false;
       indexImage.onerror = () => (indexImage.src = "assets/icons/exe.png");

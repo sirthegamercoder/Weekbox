@@ -100,7 +100,7 @@
     data-label="{{name}}"
     role="img"
     aria-label="{{name}}"
-    ><img src="assets/icons/{{icon}}" alt=""
+    ><img src="{{icon}}" alt=""
   /></span>
 </template>
 <template id="tpl-engineCompatibilityPicker">
@@ -155,7 +155,7 @@
     data-engine-icon="{{icon}}"
     class="{{selectedClass}}"
   >
-    <img src="assets/icons/{{icon}}" alt="" />{{name}}
+    <img src="{{icon}}" alt="" />{{name}}
   </button>
 </template>
 <template id="tpl-versionOption">
@@ -1401,6 +1401,12 @@
   <div class="version-item" role="listitem">
     <span class="version-text"></span>
     <div class="version-actions">
+      <button class="engine-action-btn engine-launch-btn" type="button">
+        <i class="fa-solid fa-play" aria-hidden="true"></i>
+      </button>
+      <button class="engine-action-btn engine-import-mods-btn" type="button">
+        <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+      </button>
       <button class="engine-action-btn engine-update-btn" type="button">
         <i class="fa-solid fa-rotate" aria-hidden="true"></i>
       </button>

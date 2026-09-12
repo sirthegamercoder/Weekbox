@@ -1417,6 +1417,382 @@
   color: var(--on-primary) !important;
 }
 
+.engine-custom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 22000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 62%);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.engine-custom-overlay.show {
+  opacity: 1;
+}
+
+.engine-custom-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  box-sizing: border-box;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: var(--bg-panel);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 52%);
+  transform: scale(0.96) translateY(4px);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.engine-custom-overlay.show .engine-custom-dialog {
+  transform: scale(1) translateY(0);
+}
+
+.engine-custom-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.engine-custom-header h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 1.25rem;
+  text-wrap: balance;
+}
+
+.engine-custom-body {
+  padding: 22px 24px;
+}
+
+.engine-custom-folder-button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-color);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.engine-custom-folder-button:hover,
+.engine-custom-folder-button:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.engine-custom-folder-button > i:first-child {
+  color: var(--primary);
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.engine-custom-folder-button span {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.engine-custom-folder-button small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine-custom-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.engine-custom-fields label {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.engine-custom-fields input,
+.engine-custom-fields select {
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-color);
+  color: var(--text-main);
+  font: inherit;
+  outline: none;
+}
+
+.engine-custom-fields input:focus,
+.engine-custom-fields select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.engine-custom-content-heading {
+  display: grid;
+  gap: 4px;
+  margin-top: 22px;
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.engine-custom-content-heading small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.engine-custom-folders {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.engine-custom-folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-color);
+  cursor: pointer;
+}
+
+.engine-custom-folder-toggle {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.engine-custom-folder-row input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.engine-custom-folder-check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: transparent;
+  font-size: 0.7rem;
+}
+
+.engine-custom-folder-row input:checked + .engine-custom-folder-check {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.engine-custom-folder-row:has(input:focus-visible),
+.engine-custom-folder-row:has(select:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.engine-custom-folder-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.engine-custom-folder-copy strong {
+  min-width: 0;
+  color: var(--text-main);
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.engine-custom-empty,
+.engine-custom-status {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.engine-custom-family-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-color);
+}
+
+.engine-custom-family-preview-icon,
+.engine-custom-icon-preview {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  object-fit: contain;
+  border-radius: 9px;
+}
+
+.engine-custom-icon-field {
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.engine-custom-icon-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.engine-custom-icon-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-color);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.engine-custom-icon-button:hover,
+.engine-custom-icon-button:focus-visible,
+.engine-custom-icon-clear:hover,
+.engine-custom-icon-clear:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.engine-custom-icon-clear {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.engine-custom-family-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.engine-custom-family-action {
+  display: grid;
+  width: 32px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.engine-custom-family-action:hover,
+.engine-custom-family-action:focus-visible {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+  color: var(--text-main);
+  outline: none;
+}
+
+.engine-custom-family-action--delete:hover,
+.engine-custom-family-action--delete:focus-visible {
+  border-color: rgb(255 74 74 / 45%);
+  background: rgb(255 74 74 / 12%);
+  color: #ff6b6b;
+}
+
+.engine-custom-folder-role {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.engine-custom-status {
+  min-height: 1.2em;
+  margin: 14px 0 0;
+}
+
+.engine-custom-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 22px;
+  border-top: 1px solid var(--border-color);
+}
+
+.engine-custom-actions button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.engine-custom-actions button:hover,
+.engine-custom-actions button:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.engine-custom-actions .engine-custom-next,
+.engine-custom-actions .engine-custom-submit {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.engine-custom-actions button:active {
+  transform: scale(0.96);
+}
+
 .engine-download-picker--chooser .engine-download-picker__header {
   justify-content: flex-start;
 }

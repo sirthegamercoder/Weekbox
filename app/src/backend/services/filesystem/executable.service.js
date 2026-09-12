@@ -164,6 +164,32 @@ var _ExecutableService = class _ExecutableService {
     }
     return null;
   }
+  async findAll(dir) {
+    if (!dir) return [];
+    const normalizedDir = String(dir).replace(/\\/g, "/").replace(/\/+$/, "");
+    if (window.NL_OS === "Windows") {
+      try {
+        const result = await Neutralino.os.execCommand(
+          `where.exe /r "${normalizedDir.replace(/\//g, "\\")}" *.exe`,
+          { background: false },
+        );
+        if (result?.exitCode === 0) {
+          return [
+            ...new Set(
+              String(result.stdOut || "")
+                .split(/\r?\n/)
+                .map((path) => path.trim().replace(/\\/g, "/"))
+                .filter(
+                  (path) => !isExcludedExecutable(path.split("/").at(-1)),
+                ),
+            ),
+          ].slice(0, 24);
+        }
+      } catch {}
+    }
+    const executable = await this.find(normalizedDir);
+    return executable ? [executable] : [];
+  }
   getLastError() {
     return this.lastError;
   }
