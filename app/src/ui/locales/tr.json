@@ -1,4 +1,5 @@
 {
+  "whatsNew.title": "WeekBox {{version}}",
   "app.loading": "Yükleniyor",
   "app.startupProgress": "WeekBox başlangıç işlemi",
   "app.starting": "WeekBox başlatılıyor",

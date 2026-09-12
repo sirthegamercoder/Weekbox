@@ -67,6 +67,7 @@ settingDefinitions = {
   engineVersionPreferences: { type: "string", defaultValue: "{}" },
   firstRunStorageSetupComplete: { type: "boolean", defaultValue: false },
   baseGameSupportWarningShown: { type: "boolean", defaultValue: false },
+  lastSeenWhatsNewVersion: { type: "string", defaultValue: "" },
 };
 
 appSettings = {

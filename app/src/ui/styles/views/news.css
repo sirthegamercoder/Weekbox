@@ -341,6 +341,22 @@
   text-decoration: underline;
 }
 
+.whats-new-modal {
+  z-index: 22000;
+}
+
+.whats-new-modal__content {
+  width: min(92vw, 860px);
+  height: auto;
+  max-height: min(88vh, 820px);
+  min-height: 0;
+  border: 0;
+}
+
+.whats-new-modal .news-detail-modal__body:focus {
+  outline: 0;
+}
+
 @media (max-width: 560px) {
   .news-view {
     padding: 24px 16px;

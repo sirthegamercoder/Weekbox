@@ -7,11 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.3.1] - 2026-09-11
 
+### Added
+
+- Added an in-app What's New window for new WeekBox releases.
+- Release notes now use the matching section from the Markdown changelog.
+
+### Changed
+
+- Custom engine imports now add configured mods automatically.
+- Existing custom-engine mods are matched instead of duplicated.
+- The engine picker hides custom families with no installed versions.
+- Removing a custom engine family now removes all of its versions together.
+- Removed the old manual engine-mod import action.
+
 ### Fixed
 
-- Fixed custom engine imports, including duplicate mods and deleted versions.
-- Removed empty custom engine families and leftover download parts.
-- Fixed Windows treating extensionless mod files as executables.
+- Re-importing a deleted custom-engine version works again.
+- Empty custom engine families and missing versions are cleaned up on startup.
+- Leftover multipart engine and mod downloads are cleaned up on startup.
+- Windows no longer treats extensionless mod files as executables.
 
 ## [2.3.0] - 2026-09-11
 

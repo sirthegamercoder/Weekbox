@@ -1,4 +1,5 @@
 {
+  "whatsNew.title": "WeekBox {{version}}",
   "app.loading": "Memuat",
   "app.startupProgress": "Proses awal WeekBox",
   "app.starting": "Memulai WeekBox",

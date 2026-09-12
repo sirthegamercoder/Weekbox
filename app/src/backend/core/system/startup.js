@@ -24,6 +24,7 @@ import { storageRecommendationModal } from "../../../ui/js/storageRecommendation
 import { modManagerModal } from "../../../ui/js/mod-manager/index.js";
 import { firstRunStorageModal } from "../../../ui/js/firstRunStorageModal.js";
 import { firstRunLanguageModal } from "../../../ui/js/firstRunLanguageModal.js";
+import { whatsNewModal } from "../../../ui/js/updates/whatsNewModal.js";
 import { i18n, t } from "../../../ui/js/i18n/index.js";
 
 const SINGLE_INSTANCE_MUTEX = "Global\\WeekBox-com.weekbox.app";
@@ -536,6 +537,11 @@ async function startApp() {
       console.warn("Background library maintenance failed", error),
     );
     await startupLoader.complete();
+    await whatsNewModal
+      .showIfNeeded()
+      .catch((error) =>
+        console.warn("Could not show the What's New prompt", error),
+      );
     await openLaunchDeepLink().catch((error) =>
       console.warn("Could not open the WeekBox launch link", error),
     );

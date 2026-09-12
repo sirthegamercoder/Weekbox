@@ -14,6 +14,10 @@ async function buildAssets(watch = false) {
   const outDir = path.resolve(__dirname, "../app/dist");
   fs.mkdirSync(outDir, { recursive: true });
   fs.rmSync(path.join(outDir, "flags"), { recursive: true, force: true });
+  fs.copyFileSync(
+    path.resolve(__dirname, "../CHANGELOG.md"),
+    path.join(outDir, "CHANGELOG.md"),
+  );
 
   const jsOptions = {
     entryPoints: [

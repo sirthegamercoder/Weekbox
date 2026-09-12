@@ -451,6 +451,7 @@
   "updates.checkFailed": "Could not check for updates.",
   "updates.tryAgain": "Try again",
   "updates.installFailed": "Could not install the update.",
+  "whatsNew.title": "WeekBox {{version}}",
   "settings.checkingForUpdates": "Checking for updates…",
   "network.youAreOffline": "You are offline",
   "network.offlineDetails": "Discover, search, downloads, and engine release checks need an internet connection. Your local mods and engines are still available from their managers.",
