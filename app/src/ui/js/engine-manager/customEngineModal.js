@@ -1,5 +1,6 @@
 import { FS } from "../../../backend/services/filesystem.js";
 import { t } from "../i18n/index.js";
+import { engineUpdateToast } from "../engines/engineUpdateToast.js";
 import {
   activateCheckoutDialog,
   deactivateCheckoutDialog,
@@ -392,7 +393,7 @@ export const customEngineModal = {
             ?.querySelector("[data-folder-role]")?.value || "mod",
         enabled: input.checked,
       }));
-      await FS.importCustomEngine({
+      const importedEngine = await FS.importCustomEngine({
         sourcePath: this.sourcePath,
         engineId:
           this.existingEngineId ||
@@ -404,6 +405,16 @@ export const customEngineModal = {
         contentFolders,
         allowLibrarySource: this.allowLibrarySource,
       });
+      const imported = await FS.importCustomEngineMods(
+        importedEngine.id,
+        importedEngine.version,
+      );
+      engineUpdateToast.info(
+        importedEngine.id,
+        FS.getEngineDetails(importedEngine.id)?.name || name,
+        t("engineManager.importedCustomMods", { count: imported.length }),
+      );
+      document.dispatchEvent(new CustomEvent("mods-updated"));
       await this.onImported?.();
       this.close();
     } catch (error) {

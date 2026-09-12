@@ -94,7 +94,13 @@ async function findMacBundleExecutable(service, fullPath) {
   }
 }
 
-async function scanExecutableDirectory(service, currentDir, depth, isMacOS) {
+async function scanExecutableDirectory(
+  service,
+  currentDir,
+  depth,
+  isMacOS,
+  isWindows,
+) {
   const children = [];
   try {
     const entries = getRealEntries(
@@ -117,6 +123,7 @@ async function scanExecutableDirectory(service, currentDir, depth, isMacOS) {
         entry.entry.toLowerCase().endsWith(".exe") &&
         !isExcludedExecutable(entry.entry);
       const isUnixExecutable =
+        !isWindows &&
         !isWindowsExecutable &&
         !entry.entry.includes(".") &&
         entry.entry !== "CodeResources" &&
@@ -183,6 +190,7 @@ var _ExecutableService = class _ExecutableService {
         currentDir,
         depth,
         isMacOS,
+        isWindows,
       );
       if (scan.result) {
         this.cache.set(normalizedDir, scan.result);

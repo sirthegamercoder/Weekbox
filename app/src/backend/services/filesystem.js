@@ -488,14 +488,50 @@ async function importCustomEngineContent(service, install, engineId, version) {
       const name = entry.entry.trim();
       if (!name) continue;
       const sourceEngineFolder = `${directory.path}/${entry.entry}`;
-      if (
-        existingMods.some(
+      const engineFolderName = sanitizePathSegment(name) || name;
+      const sourceMatch = existingMods.find(
+        (mod) =>
+          mod.sourceEngineId === engineId &&
+          mod.sourceEngineVersion === version &&
+          mod.sourceEngineFolder === sourceEngineFolder,
+      );
+      if (sourceMatch) {
+        // ponytail: legacy records have no source metadata; use their engine
+        // content folder identity until content hashes are ever needed.
+        const legacyMatch = existingMods.find(
           (mod) =>
-            mod.sourceEngineId === engineId &&
-            mod.sourceEngineVersion === version &&
-            mod.sourceEngineFolder === sourceEngineFolder,
-        )
-      ) {
+            sourceMatch.source === "custom-engine" &&
+            String(sourceMatch.id).startsWith("local-") &&
+            mod !== sourceMatch &&
+            !mod.sourceEngineId &&
+            mod.engineId === engineId &&
+            mod.engineFolderName === engineFolderName &&
+            (!mod.engineVersion || mod.engineVersion === version),
+        );
+        if (legacyMatch) {
+          await removeModFiles(service, sourceMatch, sourceMatch.folderName);
+          legacyMatch.engineVersion = version;
+          legacyMatch.sourceEngineId = engineId;
+          legacyMatch.sourceEngineVersion = version;
+          legacyMatch.sourceEngineFolder = sourceEngineFolder;
+          existingMods.splice(existingMods.indexOf(sourceMatch), 1);
+          await service.mods.saveAll(existingMods);
+        }
+        continue;
+      }
+      const legacyMatch = existingMods.find(
+        (mod) =>
+          !mod.sourceEngineId &&
+          mod.engineId === engineId &&
+          mod.engineFolderName === engineFolderName &&
+          (!mod.engineVersion || mod.engineVersion === version),
+      );
+      if (legacyMatch) {
+        legacyMatch.engineVersion = version;
+        legacyMatch.sourceEngineId = engineId;
+        legacyMatch.sourceEngineVersion = version;
+        legacyMatch.sourceEngineFolder = sourceEngineFolder;
+        await service.mods.saveAll(existingMods);
         continue;
       }
       const folderName = await service.getAvailableLocalModFolderName(name);
@@ -512,7 +548,7 @@ async function importCustomEngineContent(service, install, engineId, version) {
           : null;
         await service.saveInstalledMod(modId, name, {
           folderName,
-          engineFolderName: sanitizePathSegment(name) || folderName,
+          engineFolderName,
           engineId,
           engineVersion: version,
           ...(kind ? { kind } : {}),
@@ -669,6 +705,9 @@ var _FileSystemService = class _FileSystemService {
       );
       await runPhase("Checking installed engines\u2026", 92, () =>
         this.cleanupInvalidEngineInstallations(),
+      );
+      await runPhase("Cleaning empty custom engine families\u2026", 93, () =>
+        this.cleanupEmptyCustomEngineFamilies(),
       );
       await runPhase("Checking installed mods\u2026", 94, () =>
         this.cleanupInvalidInstalledMods(),
@@ -1322,6 +1361,25 @@ var _FileSystemService = class _FileSystemService {
   async cleanupInvalidEngineInstallations() {
     return this.maintenance.cleanupInvalidEngineInstallations();
   }
+  async cleanupEmptyCustomEngineFamilies() {
+    const installedVersions = new Set(
+      (await this.getInstalledEngines())
+        .filter((engine) => engine.custom)
+        .map((engine) => `${engine.id}/${engine.version}`),
+    );
+    for (const engine of [...this.customEngines.getAll()]) {
+      const versions = Array.isArray(engine.versions) ? engine.versions : [];
+      const validVersions = versions.filter((version) =>
+        installedVersions.has(`${engine.id}/${version.version}`),
+      );
+      if (!validVersions.length) {
+        await this.removeCustomEngine(engine.id);
+      } else if (validVersions.length !== versions.length) {
+        engine.versions = validVersions;
+        await this.customEngines.upsert(engine);
+      }
+    }
+  }
   async isEngineInstalled(engineId, version) {
     if (!this.isInitialized) return false;
     const install = this.getEngineInstall(engineId, version);
@@ -1502,9 +1560,21 @@ var _FileSystemService = class _FileSystemService {
     };
     if (!existingEngine) engine.name = normalizedName || engine.name;
     if (existingEngine && detectedIcon) engine.icon = detectedIcon;
-    const existing = engine.versions.find(
+    let existing = engine.versions.find(
       (candidate) => candidate.version === normalizedVersion,
     );
+    if (
+      existing &&
+      !(await this.api.exists(
+        `${this.enginesPath}/${resolvedId}/${existing.installId}`,
+      ))
+    ) {
+      engine.versions = engine.versions.filter(
+        (candidate) => candidate !== existing,
+      );
+      await this.customEngines.upsert(engine);
+      existing = null;
+    }
     if (existing)
       throw new Error(`Version ${normalizedVersion} is already imported.`);
     const install = await copyCustomEngineInstall(this, {
@@ -1542,21 +1612,9 @@ var _FileSystemService = class _FileSystemService {
     ) {
       throw new Error("Close the custom engine before deleting its family.");
     }
-    for (const version of engine.versions) {
-      await this.api.remove(
-        `${this.enginesPath}/${engineId}/${version.installId}`,
-      );
-    }
+    const familyPath = `${this.enginesPath}/${engineId}`;
+    if (await this.api.exists(familyPath)) await this.api.remove(familyPath);
     await this.customEngines.remove(engineId);
-    if (await this.api.exists(`${this.enginesPath}/${engineId}`)) {
-      const entries = getRealEntries(
-        await Neutralino.filesystem.readDirectory(
-          `${this.enginesPath}/${engineId}`,
-        ),
-      );
-      if (!entries.length)
-        await this.api.remove(`${this.enginesPath}/${engineId}`);
-    }
     return true;
   }
   async importCustomEngineMods(engineId, version) {

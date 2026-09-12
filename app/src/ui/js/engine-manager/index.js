@@ -96,7 +96,6 @@ function bindCustomVersionActions({
   onProcessFinished,
 }) {
   const launchBtn = item.querySelector(".engine-launch-btn");
-  const importModsBtn = item.querySelector(".engine-import-mods-btn");
   const updateLaunchButton = () => {
     const running = FS.isEngineRunning(engineId, version);
     if (!launchBtn) return;
@@ -136,31 +135,6 @@ function bindCustomVersionActions({
       updateLaunchButton();
     }
   });
-  importModsBtn?.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    importModsBtn.disabled = true;
-    setButtonIcon(importModsBtn, "fa-solid fa-spinner fa-spin");
-    try {
-      const imported = await FS.importCustomEngineMods(engineId, version);
-      engineUpdateToast.info(
-        engineId,
-        displayName,
-        t("engineManager.importedCustomMods", { count: imported.length }),
-      );
-      document.dispatchEvent(new CustomEvent("mods-updated"));
-    } catch (error) {
-      errorHandler.show({
-        error,
-        action: t("engineManager.importCustomMods"),
-        item: displayName,
-        version,
-        storagePath: FS.weekboxPath,
-      });
-    } finally {
-      importModsBtn.disabled = false;
-      setButtonIcon(importModsBtn, "fa-solid fa-box-archive");
-    }
-  });
 }
 
 function configureCustomVersionActions({
@@ -171,7 +145,6 @@ function configureCustomVersionActions({
   onProcessFinished,
 }) {
   const launchBtn = item.querySelector(".engine-launch-btn");
-  const importModsBtn = item.querySelector(".engine-import-mods-btn");
   if (FS.isCustomEngine(engineId)) {
     bindCustomVersionActions({
       item,
@@ -183,7 +156,6 @@ function configureCustomVersionActions({
     return;
   }
   launchBtn?.remove();
-  importModsBtn?.remove();
 }
 
 function renameInstalledVersion(engineId, version, onSaved) {
@@ -609,9 +581,15 @@ export const engineManagerModal = {
       container.classList.remove("engine-manager-body--switched"),
     );
   },
-  renderEngineChooser() {
+  async renderEngineChooser() {
     const container = document.getElementById("engine-manager-modal-body");
     if (!container) return;
+    const installedCustomEngineIds = new Set(
+      (await FS.getInstalledEngines())
+        .filter((engine) => engine.custom)
+        .map((engine) => engine.id),
+    );
+    if (!this.isPickerOpen || !container.isConnected) return;
     const panel = document.createElement("section");
     panel.className = "engine-download-picker engine-download-picker--chooser";
     const header = document.createElement("header");
@@ -630,7 +608,11 @@ export const engineManagerModal = {
     const grid = document.createElement("div");
     grid.className = "engine-download-picker__engine-grid";
     Object.entries(FS.getAllEngineDetails())
-      .filter(([engineId]) => engineId !== "executable")
+      .filter(
+        ([engineId, details]) =>
+          engineId !== "executable" &&
+          (!details.custom || installedCustomEngineIds.has(engineId)),
+      )
       .forEach(([engineId, details]) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -868,7 +850,7 @@ export const engineManagerModal = {
     await new Promise((resolve) => setTimeout(resolve, 120));
     if (requestId !== this.pickerRequestId) return;
     if (!engineId) {
-      this.renderEngineChooser();
+      await this.renderEngineChooser();
     } else {
       const panel = this.renderDownloadPicker(engineId, [], returnTo);
       const loadingList = panel?.querySelector(
@@ -1220,12 +1202,6 @@ export const engineManagerModal = {
           launchBtn.innerHTML =
             '<i class="fa-solid fa-play" aria-hidden="true"></i>';
 
-          const importModsBtn = document.createElement("button");
-          importModsBtn.className = "engine-action-btn engine-import-mods-btn";
-          importModsBtn.type = "button";
-          importModsBtn.innerHTML =
-            '<i class="fa-solid fa-box-archive" aria-hidden="true"></i>';
-
           if (hasUpdate) {
             const updateBtn = document.createElement("button");
             updateBtn.className = "engine-action-btn engine-update-btn";
@@ -1286,14 +1262,7 @@ export const engineManagerModal = {
           preferredIcon.className = "fa-solid fa-star";
           preferredIcon.setAttribute("aria-hidden", "true");
           preferredBtn.appendChild(preferredIcon);
-          actions.append(
-            launchBtn,
-            importModsBtn,
-            dirBtn,
-            renameBtn,
-            deleteBtn,
-            preferredBtn,
-          );
+          actions.append(launchBtn, dirBtn, renameBtn, deleteBtn, preferredBtn);
           item.append(versionText, actions);
         }
 

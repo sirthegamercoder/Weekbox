@@ -188,7 +188,6 @@
   "engineManager.deleteEngineFamilyMessage": "Delete the custom family “{name}” and all of its imported versions?",
   "engineManager.launchCustomEngine": "Launch custom engine",
   "engineManager.closeCustomEngine": "Close custom engine",
-  "engineManager.importCustomMods": "Import mods from engine",
   "engineManager.importedCustomMods": "Imported {count} mod(s)",
   "engineManager.convertExecutable": "Convert to engine",
   "home.discover": "Scopri",

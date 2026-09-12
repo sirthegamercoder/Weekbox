@@ -270,7 +270,9 @@ var _LibraryMaintenanceService = class _LibraryMaintenanceService {
             .filter(
               (entry) =>
                 entry.type === "FILE" &&
-                /^temp_.+\.(?:zip|dmg)(?:\.part(?:-\d+)?)?$/i.test(entry.entry),
+                /^\.?temp[-_].+\.(?:zip|dmg)(?:\.part(?:-\d+)?)*$/i.test(
+                  entry.entry,
+                ),
             )
             .map((entry) =>
               this.api.remove(`${path}/${entry.entry}`).catch(() => {}),
